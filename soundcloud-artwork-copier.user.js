@@ -73,16 +73,12 @@
       color: #ff5500 !important;
       fill: #ff5500 !important;
     }
-    /* The native button classes we reuse for sizing fade on :hover — keep
-       our own color at full strength instead of washing out to match. */
+    /* Our forced color/fill above blocks the native buttons' own :hover
+       fade, so re-add the same fade explicitly to stay consistent with
+       sibling buttons (Like/Follow/More etc.) on hover. */
     .${TILE_BUTTON_CLASS}:hover,
-    .${TILE_BUTTON_CLASS}:hover svg,
-    .${TILE_BUTTON_CLASS}:hover svg *,
-    .${DOWNLOAD_BUTTON_CLASS}:hover,
-    .${DOWNLOAD_BUTTON_CLASS}:hover svg,
-    .${DOWNLOAD_BUTTON_CLASS}:hover svg *,
-    .${DOWNLOAD_BUTTON_CLASS}:hover .sc-button-label {
-      opacity: 1 !important;
+    .${DOWNLOAD_BUTTON_CLASS}:hover {
+      opacity: 0.7 !important;
     }
     .${STATE_SUCCESS_CLASS},
     .${STATE_SUCCESS_CLASS} svg,
