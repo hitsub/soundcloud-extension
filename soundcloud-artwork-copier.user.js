@@ -40,6 +40,26 @@
   `;
   document.head.appendChild(style);
 
+  function getMetaContent(property) {
+    const meta = document.querySelector(`meta[property="${property}"]`);
+    return meta ? meta.getAttribute('content') : null;
+  }
+
+  function isTrackPage() {
+    return getMetaContent('og:type') === 'music.song';
+  }
+
+  function getHighResUrl(baseUrl) {
+    return baseUrl.replace(/-t\d+x\d+(?=\.\w+$)/, '-original');
+  }
+
+  function resolveArtworkUrls() {
+    if (!isTrackPage()) return null;
+    const baseUrl = getMetaContent('og:image');
+    if (!baseUrl) return null;
+    return { highRes: getHighResUrl(baseUrl), fallback: baseUrl };
+  }
+
   function createButton() {
     const button = document.createElement('button');
     button.type = 'button';
