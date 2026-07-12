@@ -237,6 +237,129 @@
     return spliced.buffer;
   }
 
+  function readSyncsafeInt(bytes) {
+    return (bytes[0] << 21) | (bytes[1] << 14) | (bytes[2] << 7) | bytes[3];
+  }
+
+  function decodeId3Text(bytes) {
+    if (bytes.length === 0) return '';
+    const encoding = bytes[0];
+    const rest = bytes.subarray(1);
+    if (encoding === 1 || encoding === 2) {
+      // UTF-16, with or without a leading BOM.
+      let start = 0;
+      let littleEndian = encoding === 1;
+      if (rest.length >= 2 && rest[0] === 0xff && rest[1] === 0xfe) {
+        littleEndian = true;
+        start = 2;
+      } else if (rest.length >= 2 && rest[0] === 0xfe && rest[1] === 0xff) {
+        littleEndian = false;
+        start = 2;
+      }
+      const codeUnits = [];
+      for (let i = start; i + 1 < rest.length; i += 2) {
+        const lo = rest[i];
+        const hi = rest[i + 1];
+        codeUnits.push(littleEndian ? (hi << 8) | lo : (lo << 8) | hi);
+      }
+      return String.fromCharCode(...codeUnits).replace(/\0+$/, '');
+    }
+    return new TextDecoder(encoding === 3 ? 'utf-8' : 'iso-8859-1').decode(rest).replace(/\0+$/, '');
+  }
+
+  function parseApicFrame(data) {
+    const encoding = data[0];
+    let i = 1;
+    let mimeEnd = i;
+    while (mimeEnd < data.length && data[mimeEnd] !== 0) mimeEnd++;
+    const mimeType = new TextDecoder('iso-8859-1').decode(data.subarray(i, mimeEnd));
+    i = mimeEnd + 1;
+    const pictureType = data[i];
+    i += 1;
+    let descEnd = i;
+    if (encoding === 1 || encoding === 2) {
+      while (descEnd + 1 < data.length && !(data[descEnd] === 0 && data[descEnd + 1] === 0)) descEnd += 2;
+      descEnd += 2;
+    } else {
+      while (descEnd < data.length && data[descEnd] !== 0) descEnd++;
+      descEnd += 1;
+    }
+    return { mimeType, pictureType, data: data.subarray(descEnd) };
+  }
+
+  function parseExistingId3(buffer) {
+    // Only reads the frames we care about preserving (TIT2/TALB/TPE1/APIC);
+    // anything else in the tag is intentionally not round-tripped since
+    // browser-id3-writer always builds a brand-new tag from what we set.
+    const bytes = new Uint8Array(buffer);
+    const result = {};
+    if (bytes.length < 10 || bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return result;
+
+    const majorVersion = bytes[3];
+    const tagSize = readSyncsafeInt(bytes.subarray(6, 10));
+    let offset = 10;
+    const end = Math.min(10 + tagSize, bytes.length);
+
+    while (offset + 10 <= end) {
+      const frameId = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+      if (frameId === '\0\0\0\0') break;
+      const sizeBytes = bytes.subarray(offset + 4, offset + 8);
+      const frameSize =
+        majorVersion >= 4
+          ? readSyncsafeInt(sizeBytes)
+          : (sizeBytes[0] << 24) | (sizeBytes[1] << 16) | (sizeBytes[2] << 8) | sizeBytes[3];
+      const frameStart = offset + 10;
+      const frameData = bytes.subarray(frameStart, frameStart + frameSize);
+
+      if (frameId === 'TIT2' || frameId === 'TALB' || frameId === 'TPE1') {
+        result[frameId] = decodeId3Text(frameData);
+      } else if (frameId === 'APIC') {
+        result.APIC = parseApicFrame(frameData);
+      }
+
+      offset = frameStart + frameSize;
+    }
+    return result;
+  }
+
+  async function fetchArtworkBuffer(baseUrl) {
+    let response = await fetch(getHighResUrl(baseUrl));
+    if (!response.ok) response = await fetch(baseUrl);
+    if (!response.ok) throw new Error(`Failed to fetch artwork: ${response.status}`);
+    return { data: await response.arrayBuffer(), mimeType: response.headers.get('content-type') || 'image/jpeg' };
+  }
+
+  async function mergeMp3Metadata(buffer, fields) {
+    const existing = parseExistingId3(buffer);
+
+    // Pinned to the exact version whose source was reviewed before use.
+    const { ID3Writer } = await import(
+      'https://unpkg.com/browser-id3-writer@6.3.1/dist/browser-id3-writer.mjs'
+    );
+    const writer = new ID3Writer(buffer);
+    writer.setFrame('TIT2', existing.TIT2 || fields.title);
+    const album = existing.TALB || fields.album;
+    if (album) writer.setFrame('TALB', album);
+    const artist = existing.TPE1 || fields.artist;
+    if (artist) writer.setFrame('TPE1', [artist]);
+
+    if (existing.APIC) {
+      const pic = existing.APIC.data;
+      writer.setFrame('APIC', {
+        type: existing.APIC.pictureType,
+        data: pic.buffer.slice(pic.byteOffset, pic.byteOffset + pic.byteLength),
+        description: '',
+        useUnicodeEncoding: false,
+      });
+    } else if (fields.artworkUrl) {
+      const artwork = await fetchArtworkBuffer(fields.artworkUrl);
+      writer.setFrame('APIC', { type: 3, data: artwork.data, description: '', useUnicodeEncoding: false });
+    }
+
+    writer.addTag();
+    return writer.arrayBuffer;
+  }
+
   function getHydrationEntry(hydration, key) {
     return hydration?.find((entry) => entry.hydratable === key)?.data ?? null;
   }
@@ -272,6 +395,7 @@
       id: sound.id,
       title: sound.title || 'track',
       artist: sound.user?.username || sound.user?.full_name || '',
+      artworkUrl: sound.artwork_url || null,
     };
   }
 
@@ -300,18 +424,25 @@
     };
   }
 
-  function detectAudioFormat(buffer) {
-    const bytes = new Uint8Array(buffer, 0, 12);
+  function detectAudioFormat(buffer, contentType) {
+    const bytes = new Uint8Array(buffer, 0, Math.min(12, buffer.byteLength));
     const riff = String.fromCharCode(...bytes.subarray(0, 4));
-    const wave = String.fromCharCode(...bytes.subarray(8, 12));
-    return riff === 'RIFF' && wave === 'WAVE' ? 'wav' : 'other';
+    const wave = bytes.length >= 12 ? String.fromCharCode(...bytes.subarray(8, 12)) : '';
+    if (riff === 'RIFF' && wave === 'WAVE') return 'wav';
+
+    const isId3 = bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33; // "ID3"
+    const isMpegSync = bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+    if (isId3 || isMpegSync || contentType.includes('mpeg')) return 'mp3';
+
+    return 'other';
   }
 
   function guessExtension(format, contentType) {
     if (format === 'wav') return 'wav';
+    if (format === 'mp3') return 'mp3';
     if (contentType.includes('mp4') || contentType.includes('m4a')) return 'm4a';
     if (contentType.includes('flac')) return 'flac';
-    return 'mp3';
+    return 'bin';
   }
 
   function sanitizeFilename(name) {
@@ -348,16 +479,23 @@
     const trackData = await fetchTrackData(trackUrl);
     let { buffer, contentType } = await fetchDownloadFile(trackData.id);
 
-    const format = detectAudioFormat(buffer);
+    const format = detectAudioFormat(buffer, contentType);
     if (format === 'wav') {
       buffer = mergeWavMetadata(buffer, {
         title: trackData.title,
         artist: trackData.artist,
         album: trackData.title,
       });
+    } else if (format === 'mp3') {
+      buffer = await mergeMp3Metadata(buffer, {
+        title: trackData.title,
+        artist: trackData.artist,
+        album: trackData.title,
+        artworkUrl: trackData.artworkUrl,
+      });
     }
-    // Non-WAV formats (mp3, etc.) download unmodified for now; ID3 tagging
-    // support is planned as a follow-up.
+    // Other formats (e.g. m4a/flac) download unmodified — no equivalent
+    // metadata support implemented for them yet.
 
     const blob = new Blob([buffer]);
     triggerFileDownload(blob, `${sanitizeFilename(trackData.title)}.${guessExtension(format, contentType)}`);
