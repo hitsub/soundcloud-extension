@@ -15,6 +15,10 @@
   const TILE_BUTTON_CLASS = 'scArtworkCopy__tileButton';
   const TILE_SHADOW_CLASS = 'scArtworkCopy__tileButton--onArtwork';
   const DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__downloadButton';
+  const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
+  const TOAST_CLASS = 'scArtworkCopy__toast';
+  const TOAST_VISIBLE_CLASS = 'scArtworkCopy__toast--visible';
+  const TOAST_DURATION_MS = 4000;
   const STATE_SUCCESS_CLASS = 'scArtworkCopy--success';
   const STATE_FAILURE_CLASS = 'scArtworkCopy--failure';
   const STATE_LOADING_CLASS = 'scArtworkCopy--loading';
@@ -74,6 +78,36 @@
     @keyframes scArtworkCopySpin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
+    }
+    #${TOAST_CONTAINER_ID} {
+      position: fixed;
+      top: 56px;
+      right: 16px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .${TOAST_CLASS} {
+      max-width: 320px;
+      padding: 10px 14px;
+      border-radius: 4px;
+      border-left: 3px solid #e74c3c;
+      background: var(--background-surface-color, #222);
+      color: var(--primary-color, #fff);
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.4;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .${TOAST_CLASS}.${TOAST_VISIBLE_CLASS} {
+      opacity: 1;
+      transform: translateY(0);
     }
   `;
   document.head.appendChild(style);
@@ -719,6 +753,27 @@
     (button._iconTarget || button).innerHTML = svg;
   }
 
+  function showToast(message) {
+    let container = document.getElementById(TOAST_CONTAINER_ID);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = TOAST_CONTAINER_ID;
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = TOAST_CLASS;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add(TOAST_VISIBLE_CLASS));
+
+    setTimeout(() => {
+      toast.classList.remove(TOAST_VISIBLE_CLASS);
+      toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+    }, TOAST_DURATION_MS);
+  }
+
   function showFeedback(button, isSuccess) {
     clearTimeout(button._feedbackTimer);
     button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
@@ -750,6 +805,7 @@
         })
         .catch((err) => {
           console.error('[SC Artwork Copier]', err);
+          showToast(err.message || 'Something went wrong');
           button.classList.remove(STATE_LOADING_CLASS);
           showFeedback(button, false);
         })
