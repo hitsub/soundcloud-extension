@@ -53,6 +53,9 @@
     .${TILE_BUTTON_CLASS} {
       color: #ff5500;
     }
+    .${TILE_BUTTON_CLASS} svg {
+      filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+    }
     .${STATE_SUCCESS_CLASS} {
       color: #2ecc71;
     }
