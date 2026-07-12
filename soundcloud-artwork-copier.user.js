@@ -241,6 +241,18 @@
     return hydration?.find((entry) => entry.hydratable === key)?.data ?? null;
   }
 
+  function getOAuthToken() {
+    // api-v2 endpoints like the download one require this in addition to
+    // client_id + cookies; it's not httpOnly, so it's readable here.
+    const match = document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function authHeaders() {
+    const token = getOAuthToken();
+    return token ? { Authorization: `OAuth ${token}` } : {};
+  }
+
   async function fetchTrackData(url) {
     // A plain fetch() of the track's HTML page gets redirected to
     // m.soundcloud.com and blocked by CORS — SoundCloud's bot defenses
@@ -251,7 +263,7 @@
     // parsing needed).
     const { clientId } = getSessionCredentials();
     const resolveUrl = `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url)}&client_id=${encodeURIComponent(clientId)}`;
-    const response = await fetch(resolveUrl, { credentials: 'include' });
+    const response = await fetch(resolveUrl, { credentials: 'include', headers: authHeaders() });
     if (!response.ok) throw new Error(`Failed to resolve track: ${response.status}`);
     const sound = await response.json();
     if (sound.kind !== 'track') throw new Error('Not a track');
@@ -275,7 +287,7 @@
   async function fetchDownloadFile(trackId) {
     const { clientId, appVersion } = getSessionCredentials();
     const apiUrl = `https://api-v2.soundcloud.com/tracks/${trackId}/download?client_id=${encodeURIComponent(clientId)}&app_version=${encodeURIComponent(appVersion)}&app_locale=en`;
-    const apiResponse = await fetch(apiUrl, { credentials: 'include' });
+    const apiResponse = await fetch(apiUrl, { credentials: 'include', headers: authHeaders() });
     if (!apiResponse.ok) throw new Error(`Failed to get download URL: ${apiResponse.status}`);
     const { redirectUri } = await apiResponse.json();
     if (!redirectUri) throw new Error('No download URL returned');
