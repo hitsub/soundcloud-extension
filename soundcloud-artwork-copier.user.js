@@ -940,11 +940,11 @@
     return true;
   }
 
-  function createTileButton(artworkEl, extraClasses, withShadow) {
+  function createTileButton(copyFn, extraClasses, withShadow, icon) {
     // Matches the structure/classes of the native action buttons alongside
     // it (Like/Follow/More on grid tiles, Like/Repost/Share/... on list
-    // rows) so it lines up with them visually and inherits their existing
-    // sizing and hover-to-reveal behavior for free.
+    // rows and the hero page) so it lines up with them visually and
+    // inherits their existing sizing and hover-to-reveal behavior for free.
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `${extraClasses} ${TILE_BUTTON_CLASS}${withShadow ? ` ${TILE_SHADOW_CLASS}` : ''}`;
@@ -952,39 +952,63 @@
     button.setAttribute('aria-label', 'Copy artwork');
 
     const iconWrapper = document.createElement('div');
-    iconWrapper.innerHTML = ICON_CLIPBOARD_SOLID;
+    iconWrapper.innerHTML = icon;
     button._iconTarget = iconWrapper;
-    button._idleIcon = ICON_CLIPBOARD_SOLID;
+    button._idleIcon = icon;
 
     const label = document.createElement('span');
     label.className = 'sc-button-label sc-visuallyhidden';
     label.textContent = 'Copy artwork';
 
     button.append(iconWrapper, label);
-    attachCopyHandler(button, () => copyArtworkFromTile(artworkEl));
+    attachCopyHandler(button, copyFn);
     return button;
   }
 
-  // Two distinct track layouts exist on the site: compact grid tiles
+  // Three distinct track layouts exist on the site: compact grid tiles
   // (.playableTile__artwork + .playableTile__actionWrapper, e.g. on
-  // /you/likes' "Badges" view) and full list rows (.sound__artwork +
-  // .soundActions .sc-button-group, e.g. the "List" view / stream). Each
-  // needs its own artwork lookup and native button classes to match.
+  // /you/likes' "Badges" view), full list rows (.sound__artwork +
+  // .soundActions .sc-button-group, e.g. the "List" view / stream), and the
+  // track's own hero page (.listenEngagement__footer .soundActions
+  // .sc-button-group — same button-group markup as list rows, but not
+  // wrapped in a .sound__body tile/row). Each needs its own way to resolve
+  // a copy function and its own native button classes to match.
   const ACTION_ROW_CONFIGS = [
     {
       rowSelector: '.playableTile__actionWrapper',
       buttonClasses: 'playableTile__actionButton sc-button sc-button-small sc-button-icon',
-      findArtwork: (rowEl) => rowEl.closest('.playableTile__artwork'),
+      resolveCopy: (rowEl) => {
+        const artworkEl = rowEl.closest('.playableTile__artwork');
+        return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
+      },
       // This action row sits directly on top of the artwork image, so the
       // icon needs a contrast shadow. The "List" row's action row sits
       // below the artwork on the page background, so it doesn't.
       withShadow: true,
+      icon: ICON_CLIPBOARD_SOLID,
     },
     {
       rowSelector: '.soundActions .sc-button-group',
       buttonClasses: 'sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive',
-      findArtwork: (rowEl) => rowEl.closest('.sound__body')?.querySelector('.sound__artwork') ?? null,
+      resolveCopy: (rowEl) => {
+        const artworkEl = rowEl.closest('.sound__body')?.querySelector('.sound__artwork') ?? null;
+        return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
+      },
       withShadow: false,
+      icon: ICON_CLIPBOARD_SOLID,
+    },
+    {
+      // The hero page's action row isn't inside a .sound__body tile/row, so
+      // there's no DOM artwork element to key off of — reuse copyArtwork(),
+      // the same api-v2-backed lookup the header button uses, since
+      // location.href already is this track's own page.
+      rowSelector: '.listenEngagement__footer .soundActions .sc-button-group',
+      buttonClasses: 'sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive',
+      resolveCopy: () => copyArtwork,
+      withShadow: false,
+      // Uses the same icon as the header button rather than the tile
+      // overlay's Font Awesome clipboard glyph.
+      icon: ICON_IDLE,
     },
   ];
 
@@ -992,9 +1016,9 @@
     for (const config of ACTION_ROW_CONFIGS) {
       document.querySelectorAll(config.rowSelector).forEach((rowEl) => {
         if (rowEl.querySelector(`.${TILE_BUTTON_CLASS}`)) return;
-        const artworkEl = config.findArtwork(rowEl);
-        if (!artworkEl) return;
-        const button = createTileButton(artworkEl, config.buttonClasses, config.withShadow);
+        const copyFn = config.resolveCopy(rowEl);
+        if (!copyFn) return;
+        const button = createTileButton(copyFn, config.buttonClasses, config.withShadow, config.icon);
         const moreButton = rowEl.querySelector('.sc-button-more');
         if (moreButton) {
           rowEl.insertBefore(button, moreButton);
