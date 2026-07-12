@@ -726,7 +726,9 @@
     setIcon(button, isSuccess ? ICON_SUCCESS : ICON_FAILURE);
     button._feedbackTimer = setTimeout(() => {
       button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
-      setIcon(button, ICON_IDLE);
+      // Each button remembers its own idle icon — the download button's
+      // idle icon isn't the same clipboard icon the copy buttons use.
+      setIcon(button, button._idleIcon || ICON_IDLE);
     }, FEEDBACK_DURATION_MS);
   }
 
@@ -764,6 +766,7 @@
     button.title = 'Copy artwork';
     button.setAttribute('aria-label', 'Copy artwork');
     button.innerHTML = ICON_IDLE;
+    button._idleIcon = ICON_IDLE;
     attachCopyHandler(button, copyArtwork);
     return button;
   }
@@ -793,6 +796,7 @@
     const iconWrapper = document.createElement('div');
     iconWrapper.innerHTML = ICON_IDLE;
     button._iconTarget = iconWrapper;
+    button._idleIcon = ICON_IDLE;
 
     const label = document.createElement('span');
     label.className = 'sc-button-label sc-visuallyhidden';
@@ -850,6 +854,7 @@
     const iconWrapper = document.createElement('div');
     iconWrapper.innerHTML = ICON_DOWNLOAD;
     button._iconTarget = iconWrapper;
+    button._idleIcon = ICON_DOWNLOAD;
 
     const label = document.createElement('span');
     label.className = 'sc-button-label';
