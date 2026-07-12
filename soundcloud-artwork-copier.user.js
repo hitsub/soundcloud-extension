@@ -360,6 +360,157 @@
     return writer.arrayBuffer;
   }
 
+  function parseFlacBlocks(buffer) {
+    const view = new DataView(buffer);
+    const blocks = [];
+    let offset = 4; // skip "fLaC" magic
+    while (offset + 4 <= buffer.byteLength) {
+      const headerByte = view.getUint8(offset);
+      const isLast = (headerByte & 0x80) !== 0;
+      const type = headerByte & 0x7f;
+      const length = (view.getUint8(offset + 1) << 16) | (view.getUint8(offset + 2) << 8) | view.getUint8(offset + 3);
+      blocks.push({ type, start: offset, dataStart: offset + 4, length });
+      offset += 4 + length;
+      if (isLast) break;
+    }
+    return blocks;
+  }
+
+  function readVorbisComments(buffer, block) {
+    // Metadata block headers and the PICTURE block use big-endian, but
+    // Vorbis comment fields are little-endian — inherited as-is from the
+    // original Ogg Vorbis comment spec.
+    const view = new DataView(buffer);
+    let offset = block.dataStart;
+    const vendorLength = view.getUint32(offset, true);
+    offset += 4 + vendorLength;
+    const commentCount = view.getUint32(offset, true);
+    offset += 4;
+
+    const values = {};
+    for (let i = 0; i < commentCount; i++) {
+      const len = view.getUint32(offset, true);
+      offset += 4;
+      const text = new TextDecoder('utf-8').decode(new Uint8Array(buffer, offset, len));
+      const eq = text.indexOf('=');
+      if (eq !== -1) values[text.slice(0, eq).toUpperCase()] = text.slice(eq + 1);
+      offset += len;
+    }
+    return values;
+  }
+
+  function readPictureBlock(buffer, block) {
+    const view = new DataView(buffer);
+    let offset = block.dataStart;
+    const pictureType = view.getUint32(offset, false);
+    offset += 4;
+    const mimeLength = view.getUint32(offset, false);
+    offset += 4;
+    const mimeType = new TextDecoder('ascii').decode(new Uint8Array(buffer, offset, mimeLength));
+    offset += mimeLength;
+    const descLength = view.getUint32(offset, false);
+    offset += 4 + descLength; // description text isn't something we round-trip
+    offset += 16; // width, height, color depth, indexed-color count
+    const dataLength = view.getUint32(offset, false);
+    offset += 4;
+    return { pictureType, mimeType, data: new Uint8Array(buffer, offset, dataLength) };
+  }
+
+  function buildFlacMetadataBlock(type, data) {
+    // The last-block flag gets fixed up once the final block order is
+    // known, so this always constructs with it cleared.
+    const header = new Uint8Array(4);
+    header[0] = type & 0x7f;
+    header[1] = (data.length >> 16) & 0xff;
+    header[2] = (data.length >> 8) & 0xff;
+    header[3] = data.length & 0xff;
+    return concatBytes([header, data]);
+  }
+
+  function buildVorbisCommentBlock(fields) {
+    const encoder = new TextEncoder();
+    const vendor = encoder.encode('SoundCloud Artwork Copier');
+    const comments = [];
+    if (fields.title) comments.push(encoder.encode(`TITLE=${fields.title}`));
+    if (fields.artist) comments.push(encoder.encode(`ARTIST=${fields.artist}`));
+    if (fields.album) comments.push(encoder.encode(`ALBUM=${fields.album}`));
+
+    const le32 = (n) => {
+      const buf = new Uint8Array(4);
+      new DataView(buf.buffer).setUint32(0, n, true);
+      return buf;
+    };
+
+    const parts = [le32(vendor.length), vendor, le32(comments.length)];
+    for (const c of comments) parts.push(le32(c.length), c);
+
+    return buildFlacMetadataBlock(4, concatBytes(parts));
+  }
+
+  function buildPictureBlock(mimeType, pictureData, pictureType = 3) {
+    const encoder = new TextEncoder();
+    const mimeBytes = encoder.encode(mimeType);
+    const be32 = (n) => {
+      const buf = new Uint8Array(4);
+      new DataView(buf.buffer).setUint32(0, n, false);
+      return buf;
+    };
+
+    const parts = [
+      be32(pictureType),
+      be32(mimeBytes.length),
+      mimeBytes,
+      be32(0), // no description
+      new Uint8Array(16), // width, height, color depth, indexed-color count: unknown
+      be32(pictureData.byteLength),
+      new Uint8Array(pictureData),
+    ];
+    return buildFlacMetadataBlock(6, concatBytes(parts));
+  }
+
+  async function mergeFlacMetadata(buffer, fields) {
+    const blocks = parseFlacBlocks(buffer);
+    const existingCommentBlock = blocks.find((b) => b.type === 4);
+    const existingValues = existingCommentBlock ? readVorbisComments(buffer, existingCommentBlock) : {};
+    const existingPictureBlock = blocks.find((b) => b.type === 6);
+
+    const commentBlockBytes = buildVorbisCommentBlock({
+      title: existingValues.TITLE || fields.title,
+      artist: existingValues.ARTIST || fields.artist,
+      album: existingValues.ALBUM || fields.album,
+    });
+
+    let pictureBlockBytes = null;
+    if (existingPictureBlock) {
+      const pic = readPictureBlock(buffer, existingPictureBlock);
+      pictureBlockBytes = buildPictureBlock(pic.mimeType, pic.data, pic.pictureType);
+    } else if (fields.artworkUrl) {
+      const artwork = await fetchArtworkBuffer(fields.artworkUrl);
+      pictureBlockBytes = buildPictureBlock(artwork.mimeType, artwork.data);
+    }
+
+    // STREAMINFO (type 0) must stay first; everything else (PADDING,
+    // APPLICATION, SEEKTABLE, CUESHEET, ...) is kept as-is, just with our
+    // comment/picture blocks replacing whatever was there before, inserted
+    // right after STREAMINFO.
+    const original = new Uint8Array(buffer);
+    const keptBlocks = blocks.filter((b) => b.type !== 4 && b.type !== 6).map((b) => original.slice(b.start, b.start + 4 + b.length));
+
+    const newBlocks = [
+      keptBlocks[0], // STREAMINFO
+      commentBlockBytes,
+      ...(pictureBlockBytes ? [pictureBlockBytes] : []),
+      ...keptBlocks.slice(1),
+    ];
+    newBlocks.forEach((block, i) => {
+      block[0] = (block[0] & 0x7f) | (i === newBlocks.length - 1 ? 0x80 : 0);
+    });
+
+    const lastOriginalBlock = blocks[blocks.length - 1];
+    const audioData = original.subarray(lastOriginalBlock.dataStart + lastOriginalBlock.length);
+    return concatBytes([original.subarray(0, 4), ...newBlocks, audioData]).buffer;
+  }
+
   function getHydrationEntry(hydration, key) {
     return hydration?.find((entry) => entry.hydratable === key)?.data ?? null;
   }
