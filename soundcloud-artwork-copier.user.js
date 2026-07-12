@@ -237,63 +237,28 @@
     return spliced.buffer;
   }
 
-  function extractHydrationJson(html) {
-    // window.__sc_hydration is one large embedded JSON array. A naive
-    // regex up to the first "];" breaks on track titles that contain
-    // literal brackets (e.g. "[Buzz's Mix n Mash]"), so bracket-match by
-    // hand while staying aware of string literals.
-    const marker = 'window.__sc_hydration = ';
-    const start = html.indexOf(marker);
-    if (start === -1) return null;
-    const jsonStart = start + marker.length;
-
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let i = jsonStart; i < html.length; i++) {
-      const ch = html[i];
-      if (inString) {
-        if (escaped) escaped = false;
-        else if (ch === '\\') escaped = true;
-        else if (ch === '"') inString = false;
-        continue;
-      }
-      if (ch === '"') inString = true;
-      else if (ch === '[') depth++;
-      else if (ch === ']') {
-        depth--;
-        if (depth === 0) {
-          try {
-            return JSON.parse(html.slice(jsonStart, i + 1));
-          } catch {
-            return null;
-          }
-        }
-      }
-    }
-    return null;
-  }
-
   function getHydrationEntry(hydration, key) {
     return hydration?.find((entry) => entry.hydratable === key)?.data ?? null;
   }
 
   async function fetchTrackData(url) {
-    // Same staleness concern as fetchCurrentPageMeta: SPA navigation never
-    // updates window.__sc_hydration for the newly-viewed track, so always
-    // re-fetch the target track's own page fresh.
-    const response = await fetch(url, { credentials: 'same-origin' });
-    const html = await response.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const ogType = doc.querySelector('meta[property="og:type"]')?.getAttribute('content');
-    if (ogType !== 'music.song') throw new Error('Not a track page');
-
-    const sound = getHydrationEntry(extractHydrationJson(html), 'sound');
-    if (!sound?.id) throw new Error('Could not read track data');
+    // A plain fetch() of the track's HTML page gets redirected to
+    // m.soundcloud.com and blocked by CORS — SoundCloud's bot defenses
+    // (DataDome) appear to flag script-issued fetches of page HTML even
+    // for the page currently being viewed. The api-v2 resolve endpoint is
+    // the same kind of AJAX call the download endpoint already uses
+    // successfully, and returns the track JSON directly (no HTML/hydration
+    // parsing needed).
+    const { clientId } = getSessionCredentials();
+    const resolveUrl = `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url)}&client_id=${encodeURIComponent(clientId)}`;
+    const response = await fetch(resolveUrl, { credentials: 'include' });
+    if (!response.ok) throw new Error(`Failed to resolve track: ${response.status}`);
+    const sound = await response.json();
+    if (sound.kind !== 'track') throw new Error('Not a track');
 
     return {
       id: sound.id,
-      title: sound.title || doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 'track',
+      title: sound.title || 'track',
       artist: sound.user?.username || sound.user?.full_name || '',
     };
   }
