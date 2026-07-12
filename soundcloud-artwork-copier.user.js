@@ -112,6 +112,66 @@
   `;
   document.head.appendChild(style);
 
+  const ERROR_MESSAGES = {
+    NOT_TRACK_PAGE: {
+      en: () => "This isn't a track page.",
+      ja: () => 'トラックページではありません。',
+    },
+    ARTWORK_NOT_LOADED: {
+      en: () => "Artwork hasn't loaded yet.",
+      ja: () => 'ジャケット画像がまだ読み込まれていません。',
+    },
+    FETCH_ARTWORK_FAILED: {
+      en: ({ status }) => `Failed to fetch artwork (${status}).`,
+      ja: ({ status }) => `ジャケット画像の取得に失敗しました（${status}）。`,
+    },
+    RESOLVE_TRACK_FAILED: {
+      en: ({ status }) => `Failed to look up the track (${status}).`,
+      ja: ({ status }) => `トラック情報の取得に失敗しました（${status}）。`,
+    },
+    NOT_A_TRACK: {
+      en: () => "This isn't a track.",
+      ja: () => 'トラックではありません。',
+    },
+    MISSING_SESSION_CREDENTIALS: {
+      en: () => 'Could not read SoundCloud session credentials.',
+      ja: () => 'SoundCloudのセッション情報を取得できませんでした。',
+    },
+    DOWNLOAD_URL_FAILED: {
+      en: ({ status }) => `Failed to get a download URL (${status}).`,
+      ja: ({ status }) => `ダウンロードURLの取得に失敗しました（${status}）。`,
+    },
+    NO_DOWNLOAD_URL: {
+      en: () => 'No download URL was returned.',
+      ja: () => 'ダウンロードURLが返されませんでした。',
+    },
+    DOWNLOAD_FILE_FAILED: {
+      en: ({ status }) => `Failed to download the file (${status}).`,
+      ja: ({ status }) => `ファイルのダウンロードに失敗しました（${status}）。`,
+    },
+    UNKNOWN: {
+      en: () => 'Something went wrong.',
+      ja: () => '不明なエラーが発生しました。',
+    },
+  };
+
+  function failWith(code, params) {
+    // The English code/params combo stays in .message so console.error
+    // output is still useful for debugging regardless of locale; the
+    // localized text for the toast is looked up separately from .code.
+    const err = new Error(params ? `${code} ${JSON.stringify(params)}` : code);
+    err.code = code;
+    err.params = params || {};
+    throw err;
+  }
+
+  function localizeError(err) {
+    const lang = (navigator.language || 'en').slice(0, 2).toLowerCase();
+    const entry = ERROR_MESSAGES[err?.code] || ERROR_MESSAGES.UNKNOWN;
+    const translate = entry[lang] || entry.en;
+    return translate(err?.params || {});
+  }
+
   function getHighResUrl(baseUrl) {
     return baseUrl.replace(/-t\d+x\d+(?=\.\w+$)/, '-original');
   }
@@ -133,7 +193,7 @@
   async function copyArtworkFromBaseUrl(baseUrl) {
     let response = await fetch(getHighResUrl(baseUrl));
     if (!response.ok) response = await fetch(baseUrl);
-    if (!response.ok) throw new Error(`Failed to fetch artwork: ${response.status}`);
+    if (!response.ok) failWith('FETCH_ARTWORK_FAILED', { status: response.status });
 
     const blob = await response.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
@@ -141,7 +201,7 @@
 
   async function copyArtwork() {
     const meta = await fetchCurrentPageMeta();
-    if (meta.ogType !== 'music.song' || !meta.ogImage) throw new Error('Not a track page');
+    if (meta.ogType !== 'music.song' || !meta.ogImage) failWith('NOT_TRACK_PAGE');
     await copyArtworkFromBaseUrl(meta.ogImage);
   }
 
@@ -156,7 +216,7 @@
 
   async function copyArtworkFromTile(artworkEl) {
     const baseUrl = getArtworkUrlFromTile(artworkEl);
-    if (!baseUrl) throw new Error('Artwork not loaded yet');
+    if (!baseUrl) failWith('ARTWORK_NOT_LOADED');
     await copyArtworkFromBaseUrl(baseUrl);
   }
 
@@ -397,7 +457,7 @@
   async function fetchArtworkBuffer(baseUrl) {
     let response = await fetch(getHighResUrl(baseUrl));
     if (!response.ok) response = await fetch(baseUrl);
-    if (!response.ok) throw new Error(`Failed to fetch artwork: ${response.status}`);
+    if (!response.ok) failWith('FETCH_ARTWORK_FAILED', { status: response.status });
     return { data: await response.arrayBuffer(), mimeType: response.headers.get('content-type') || 'image/jpeg' };
   }
 
@@ -620,9 +680,9 @@
     const { clientId } = getSessionCredentials();
     const resolveUrl = `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url)}&client_id=${encodeURIComponent(clientId)}`;
     const response = await fetch(resolveUrl, { credentials: 'include', headers: authHeaders() });
-    if (!response.ok) throw new Error(`Failed to resolve track: ${response.status}`);
+    if (!response.ok) failWith('RESOLVE_TRACK_FAILED', { status: response.status });
     const sound = await response.json();
-    if (sound.kind !== 'track') throw new Error('Not a track');
+    if (sound.kind !== 'track') failWith('NOT_A_TRACK');
 
     return {
       id: sound.id,
@@ -638,7 +698,7 @@
     // per-track, so the live page's own globals are always current.
     const clientId = getHydrationEntry(window.__sc_hydration, 'apiClient')?.id;
     const appVersion = window.__sc_version;
-    if (!clientId || !appVersion) throw new Error('Missing session credentials');
+    if (!clientId || !appVersion) failWith('MISSING_SESSION_CREDENTIALS');
     return { clientId, appVersion };
   }
 
@@ -646,12 +706,12 @@
     const { clientId, appVersion } = getSessionCredentials();
     const apiUrl = `https://api-v2.soundcloud.com/tracks/${trackId}/download?client_id=${encodeURIComponent(clientId)}&app_version=${encodeURIComponent(appVersion)}&app_locale=en`;
     const apiResponse = await fetch(apiUrl, { credentials: 'include', headers: authHeaders() });
-    if (!apiResponse.ok) throw new Error(`Failed to get download URL: ${apiResponse.status}`);
+    if (!apiResponse.ok) failWith('DOWNLOAD_URL_FAILED', { status: apiResponse.status });
     const { redirectUri } = await apiResponse.json();
-    if (!redirectUri) throw new Error('No download URL returned');
+    if (!redirectUri) failWith('NO_DOWNLOAD_URL');
 
     const fileResponse = await fetch(redirectUri);
-    if (!fileResponse.ok) throw new Error(`Failed to download file: ${fileResponse.status}`);
+    if (!fileResponse.ok) failWith('DOWNLOAD_FILE_FAILED', { status: fileResponse.status });
     return {
       buffer: await fileResponse.arrayBuffer(),
       contentType: fileResponse.headers.get('content-type') || '',
@@ -805,7 +865,7 @@
         })
         .catch((err) => {
           console.error('[SC Artwork Copier]', err);
-          showToast(err.message || 'Something went wrong');
+          showToast(localizeError(err));
           button.classList.remove(STATE_LOADING_CLASS);
           showFeedback(button, false);
         })
