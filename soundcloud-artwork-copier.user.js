@@ -107,6 +107,10 @@
   const TILE_SHADOW_CLASS = 'scArtworkCopy__tileButton--onArtwork';
   const DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__downloadButton';
   const MORE_BUTTON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownload';
+  // The grid ("Badges") tile's More button sits directly on top of the
+  // artwork image (like the tile copy button), so it keeps the older
+  // icon-color treatment instead of the outline used everywhere else.
+  const MORE_BUTTON_ICON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownloadIcon';
   const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
   const TOAST_CLASS = 'scArtworkCopy__toast';
   const TOAST_VISIBLE_CLASS = 'scArtworkCopy__toast--visible';
@@ -142,9 +146,16 @@
       color: #ff5500 !important;
       fill: #ff5500 !important;
     }
-    .${MORE_BUTTON_HIGHLIGHT_CLASS},
-    .${MORE_BUTTON_HIGHLIGHT_CLASS} svg,
-    .${MORE_BUTTON_HIGHLIGHT_CLASS} svg * {
+    .${MORE_BUTTON_HIGHLIGHT_CLASS} {
+      /* Negative offset draws the outline inside the button's own box
+         instead of protruding outward — an outward box-shadow/outline got
+         clipped unevenly by the list row's tightly packed button group. */
+      outline: 2px solid #ff5500 !important;
+      outline-offset: -2px;
+    }
+    .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS},
+    .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS} svg,
+    .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS} svg * {
       color: #ff5500 !important;
       fill: #ff5500 !important;
     }
@@ -153,7 +164,7 @@
        sibling buttons (Like/Follow/More etc.) on hover. */
     .${TILE_BUTTON_CLASS}:hover,
     .${DOWNLOAD_BUTTON_CLASS}:hover,
-    .${MORE_BUTTON_HIGHLIGHT_CLASS}:hover {
+    .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS}:hover {
       opacity: 0.7 !important;
     }
     .${STATE_SUCCESS_CLASS},
@@ -880,15 +891,24 @@
     return permalinkFromScope(trigger);
   }
 
+  function markTriggerDownloadable(trigger) {
+    if (trigger.dataset.scHasDownload) return;
+    trigger.dataset.scHasDownload = '1';
+    // The grid tile's More button sits on top of the artwork, so it keeps
+    // the icon-color treatment instead of the outline used elsewhere.
+    const isGridTile = !!trigger.closest('.playableTile__actionWrapper');
+    trigger.classList.add(isGridTile ? MORE_BUTTON_ICON_HIGHLIGHT_CLASS : MORE_BUTTON_HIGHLIGHT_CLASS);
+  }
+
   function highlightDownloadableTriggers() {
     // Complements insertDownloadButtons()'s open-then-highlight fallback:
     // this fires as soon as passively-collected data says a track is
     // downloadable, even before its "More" button has ever been opened.
     if (downloadableByPath.size === 0) return;
     document.querySelectorAll('.sc-button-more').forEach((trigger) => {
-      if (trigger.classList.contains(MORE_BUTTON_HIGHLIGHT_CLASS)) return;
+      if (trigger.dataset.scHasDownload) return;
       const path = permalinkPath(permalinkFromScope(trigger));
-      if (path && downloadableByPath.get(path)) trigger.classList.add(MORE_BUTTON_HIGHLIGHT_CLASS);
+      if (path && downloadableByPath.get(path)) markTriggerDownloadable(trigger);
     });
   }
 
@@ -1134,7 +1154,7 @@
       // as its tile/row does, so the highlight persists after the dropdown
       // closes.
       const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
-      trigger?.classList.add(MORE_BUTTON_HIGHLIGHT_CLASS);
+      if (trigger) markTriggerDownloadable(trigger);
 
       if (groupEl.querySelector(`.${DOWNLOAD_BUTTON_CLASS}`)) return;
       nativeDownloadButton.insertAdjacentElement('afterend', createDownloadButton(dropdownEl));
