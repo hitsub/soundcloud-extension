@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         SoundCloud Artwork Copier
+// @name         SoundCloud Artwork Copier & Metadata Downloader
 // @namespace    https://github.com/hitsub/sc-jacket-extensions
-// @version      0.1.0
-// @description  Copy the current track's artwork image to the clipboard from a button next to the SoundCloud header search box
+// @version      0.2.0
+// @description  Copy track artwork from the header, track tiles/rows, or the More menu, and download files with missing title/artist/album/artwork tags filled in automatically (WAV/MP3/FLAC)
 // @author       hitsub
 // @match        *://soundcloud.com/*
 // @grant        none
