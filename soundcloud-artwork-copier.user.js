@@ -124,6 +124,117 @@
     await copyArtworkFromBaseUrl(baseUrl);
   }
 
+  function concatBytes(arrays) {
+    const total = arrays.reduce((sum, a) => sum + a.length, 0);
+    const result = new Uint8Array(total);
+    let offset = 0;
+    for (const a of arrays) {
+      result.set(a, offset);
+      offset += a.length;
+    }
+    return result;
+  }
+
+  function parseWavChunks(buffer) {
+    const view = new DataView(buffer);
+    const chunks = [];
+    let offset = 12; // skip "RIFF" + size + "WAVE"
+    while (offset + 8 <= buffer.byteLength) {
+      const id = String.fromCharCode(
+        view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3)
+      );
+      const size = view.getUint32(offset + 4, true);
+      chunks.push({ id, start: offset, dataStart: offset + 8, size });
+      offset += 8 + size + (size % 2);
+    }
+    return chunks;
+  }
+
+  function findInfoChunk(buffer, chunks) {
+    const view = new DataView(buffer);
+    for (const chunk of chunks) {
+      if (chunk.id !== 'LIST') continue;
+      const listType = String.fromCharCode(
+        view.getUint8(chunk.dataStart), view.getUint8(chunk.dataStart + 1),
+        view.getUint8(chunk.dataStart + 2), view.getUint8(chunk.dataStart + 3)
+      );
+      if (listType === 'INFO') return chunk;
+    }
+    return null;
+  }
+
+  function readInfoValues(buffer, infoChunk) {
+    const view = new DataView(buffer);
+    const values = {};
+    let offset = infoChunk.dataStart + 4; // skip the "INFO" list-type marker
+    const end = infoChunk.dataStart + infoChunk.size;
+    while (offset + 8 <= end) {
+      const id = String.fromCharCode(
+        view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3)
+      );
+      const size = view.getUint32(offset + 4, true);
+      const dataStart = offset + 8;
+      const bytes = new Uint8Array(buffer, dataStart, size);
+      values[id] = new TextDecoder('utf-8').decode(bytes).replace(/\0+$/, '');
+      offset = dataStart + size + (size % 2);
+    }
+    return values;
+  }
+
+  function buildInfoChunk(fields) {
+    const encoder = new TextEncoder();
+    const entries = [
+      ['INAM', fields.title],
+      ['IART', fields.artist],
+      ['IPRD', fields.album],
+    ];
+    const parts = [];
+    for (const [id, value] of entries) {
+      if (!value) continue;
+      const textBytes = encoder.encode(`${value}\0`);
+      const padded = textBytes.length % 2 === 0 ? textBytes : concatBytes([textBytes, new Uint8Array([0])]);
+      const header = new Uint8Array(8);
+      header.set(encoder.encode(id), 0);
+      new DataView(header.buffer).setUint32(4, textBytes.length, true);
+      parts.push(header, padded);
+    }
+    const infoBody = concatBytes([encoder.encode('INFO'), ...parts]);
+    const chunkHeader = new Uint8Array(8);
+    chunkHeader.set(encoder.encode('LIST'), 0);
+    new DataView(chunkHeader.buffer).setUint32(4, infoBody.length, true);
+    return concatBytes([chunkHeader, infoBody]);
+  }
+
+  function mergeWavMetadata(buffer, fields) {
+    const chunks = parseWavChunks(buffer);
+    const existingInfo = findInfoChunk(buffer, chunks);
+    const existingValues = existingInfo ? readInfoValues(buffer, existingInfo) : {};
+
+    // Only fill in whatever the file doesn't already have set.
+    const resolvedFields = {
+      title: existingValues.INAM || fields.title,
+      artist: existingValues.IART || fields.artist,
+      album: existingValues.IPRD || fields.album,
+    };
+    const newInfoChunk = buildInfoChunk(resolvedFields);
+    const original = new Uint8Array(buffer);
+
+    let spliced;
+    if (existingInfo) {
+      const chunkEnd = existingInfo.dataStart + existingInfo.size + (existingInfo.size % 2);
+      spliced = concatBytes([original.subarray(0, existingInfo.start), newInfoChunk, original.subarray(chunkEnd)]);
+    } else {
+      const dataChunk = chunks.find((c) => c.id === 'data');
+      const insertAt = dataChunk ? dataChunk.start : original.length;
+      spliced = concatBytes([original.subarray(0, insertAt), newInfoChunk, original.subarray(insertAt)]);
+    }
+
+    // The top-level RIFF size field covers everything after itself, so it
+    // needs correcting whenever the file's total length changes.
+    new DataView(spliced.buffer).setUint32(4, spliced.byteLength - 8, true);
+    return spliced.buffer;
+  }
+
   function setIcon(button, svg) {
     (button._iconTarget || button).innerHTML = svg;
   }
