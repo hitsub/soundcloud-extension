@@ -39,7 +39,7 @@
       border: none;
       border-radius: 3px;
       background: transparent;
-      color: var(--sc-header-icon-color, #999);
+      color: #ff5500;
       cursor: pointer;
     }
     .${BUTTON_CLASS}:hover {
