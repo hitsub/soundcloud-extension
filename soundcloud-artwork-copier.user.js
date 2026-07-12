@@ -12,9 +12,10 @@
   'use strict';
 
   const BUTTON_CLASS = 'scArtworkCopy__button';
-  const STATE_SUCCESS_CLASS = `${BUTTON_CLASS}--success`;
-  const STATE_FAILURE_CLASS = `${BUTTON_CLASS}--failure`;
-  const STATE_LOADING_CLASS = `${BUTTON_CLASS}--loading`;
+  const TILE_BUTTON_CLASS = 'scArtworkCopy__tileButton';
+  const STATE_SUCCESS_CLASS = 'scArtworkCopy--success';
+  const STATE_FAILURE_CLASS = 'scArtworkCopy--failure';
+  const STATE_LOADING_CLASS = 'scArtworkCopy--loading';
   const FEEDBACK_DURATION_MS = 1500;
 
   const ICON_IDLE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M9 2a1 1 0 0 0-1 1v1H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V3a1 1 0 0 0-1-1H9Zm0 2h6v2H9V4ZM6 6h2v2h8V6h2v14H6V6Z"/></svg>';
@@ -48,6 +49,32 @@
     .${BUTTON_CLASS} svg {
       width: 20px;
       height: 20px;
+    }
+    .${TILE_BUTTON_CLASS} {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.6);
+      color: #ff5500;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      z-index: 10;
+    }
+    .playableTile__artwork:hover .${TILE_BUTTON_CLASS} {
+      opacity: 1;
+    }
+    .${TILE_BUTTON_CLASS} svg {
+      width: 14px;
+      height: 14px;
     }
     .${STATE_SUCCESS_CLASS} {
       color: #2ecc71;
@@ -86,22 +113,33 @@
     };
   }
 
-  async function resolveArtworkUrls() {
-    const meta = await fetchCurrentPageMeta();
-    if (meta.ogType !== 'music.song' || !meta.ogImage) return null;
-    return { highRes: getHighResUrl(meta.ogImage), fallback: meta.ogImage };
-  }
-
-  async function copyArtwork() {
-    const urls = await resolveArtworkUrls();
-    if (!urls) throw new Error('Not a track page');
-
-    let response = await fetch(urls.highRes);
-    if (!response.ok) response = await fetch(urls.fallback);
+  async function copyArtworkFromBaseUrl(baseUrl) {
+    let response = await fetch(getHighResUrl(baseUrl));
+    if (!response.ok) response = await fetch(baseUrl);
     if (!response.ok) throw new Error(`Failed to fetch artwork: ${response.status}`);
 
     const blob = await response.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+  }
+
+  async function copyArtwork() {
+    const meta = await fetchCurrentPageMeta();
+    if (meta.ogType !== 'music.song' || !meta.ogImage) throw new Error('Not a track page');
+    await copyArtworkFromBaseUrl(meta.ogImage);
+  }
+
+  function getArtworkUrlFromTile(artworkEl) {
+    // Both the wrapping <div> and the inner <span> carry the "sc-artwork"
+    // class, but only the <span> has the background-image inline style.
+    const span = artworkEl.querySelector('.playableTile__image span.sc-artwork');
+    const match = span?.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/);
+    return match ? match[1] : null;
+  }
+
+  async function copyArtworkFromTile(artworkEl) {
+    const baseUrl = getArtworkUrlFromTile(artworkEl);
+    if (!baseUrl) throw new Error('Artwork not loaded yet');
+    await copyArtworkFromBaseUrl(baseUrl);
   }
 
   function showFeedback(button, isSuccess) {
@@ -115,14 +153,10 @@
     }, FEEDBACK_DURATION_MS);
   }
 
-  function createButton() {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = BUTTON_CLASS;
-    button.title = 'Copy artwork';
-    button.setAttribute('aria-label', 'Copy artwork');
-    button.innerHTML = ICON_IDLE;
-    button.addEventListener('click', () => {
+  function attachCopyHandler(button, copyFn) {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       if (button.disabled) return;
       button.disabled = true;
       clearTimeout(button._feedbackTimer);
@@ -130,7 +164,7 @@
       button.classList.add(STATE_LOADING_CLASS);
       button.innerHTML = ICON_LOADING;
 
-      copyArtwork()
+      copyFn()
         .then(() => {
           button.classList.remove(STATE_LOADING_CLASS);
           showFeedback(button, true);
@@ -144,6 +178,16 @@
           button.disabled = false;
         });
     });
+  }
+
+  function createButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = BUTTON_CLASS;
+    button.title = 'Copy artwork';
+    button.setAttribute('aria-label', 'Copy artwork');
+    button.innerHTML = ICON_IDLE;
+    attachCopyHandler(button, copyArtwork);
     return button;
   }
 
@@ -158,9 +202,33 @@
     return true;
   }
 
+  function createTileButton(artworkEl) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = TILE_BUTTON_CLASS;
+    button.title = 'Copy artwork';
+    button.setAttribute('aria-label', 'Copy artwork');
+    button.innerHTML = ICON_IDLE;
+    attachCopyHandler(button, () => copyArtworkFromTile(artworkEl));
+    return button;
+  }
+
+  function insertTileButtons() {
+    document.querySelectorAll('.playableTile__artwork').forEach((artworkEl) => {
+      if (artworkEl.querySelector(`.${TILE_BUTTON_CLASS}`)) return;
+      artworkEl.appendChild(createTileButton(artworkEl));
+    });
+  }
+
   // React re-renders header__middle after initial load and can wipe out
   // our injected button, so keep watching and reinsert whenever it's gone.
-  const observer = new MutationObserver(() => insertButton());
+  // Likes/playlist lists are also lazy-loaded and append new tiles as the
+  // user scrolls, so the same observer keeps those overlay buttons in sync.
+  const observer = new MutationObserver(() => {
+    insertButton();
+    insertTileButtons();
+  });
   observer.observe(document.body, { childList: true, subtree: true });
   insertButton();
+  insertTileButtons();
 })();
