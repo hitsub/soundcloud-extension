@@ -117,6 +117,10 @@
       en: () => "This isn't a track page.",
       ja: () => 'トラックページではありません。',
     },
+    NO_ARTWORK: {
+      en: () => "This track doesn't have artwork set.",
+      ja: () => 'このトラックにはジャケット画像が設定されていません。',
+    },
     ARTWORK_NOT_LOADED: {
       en: () => "Artwork hasn't loaded yet.",
       ja: () => 'ジャケット画像がまだ読み込まれていません。',
@@ -176,20 +180,6 @@
     return baseUrl.replace(/-t\d+x\d+(?=\.\w+$)/, '-original');
   }
 
-  async function fetchCurrentPageMeta() {
-    // SoundCloud is an SPA: navigating between tracks updates the URL via
-    // pushState but never touches the <meta> tags left over from the page
-    // that was first loaded. Re-fetch the current URL's HTML fresh so we
-    // always read the meta tags for the track actually being viewed.
-    const response = await fetch(location.href, { credentials: 'same-origin' });
-    const html = await response.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    return {
-      ogType: doc.querySelector('meta[property="og:type"]')?.getAttribute('content') ?? null,
-      ogImage: doc.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? null,
-    };
-  }
-
   async function copyArtworkFromBaseUrl(baseUrl) {
     let response = await fetch(getHighResUrl(baseUrl));
     if (!response.ok) response = await fetch(baseUrl);
@@ -200,9 +190,19 @@
   }
 
   async function copyArtwork() {
-    const meta = await fetchCurrentPageMeta();
-    if (meta.ogType !== 'music.song' || !meta.ogImage) failWith('NOT_TRACK_PAGE');
-    await copyArtworkFromBaseUrl(meta.ogImage);
+    // Routed through the same api-v2 /resolve call the download feature
+    // uses, rather than fetch()-ing the page's own HTML for its meta tags:
+    // that HTML fetch is what was intermittently redirected to
+    // m.soundcloud.com and blocked by CORS (SoundCloud's bot defenses).
+    let trackData;
+    try {
+      trackData = await fetchTrackData(location.href);
+    } catch (err) {
+      if (err?.code === 'NOT_A_TRACK') failWith('NOT_TRACK_PAGE');
+      throw err;
+    }
+    if (!trackData.artworkUrl) failWith('NO_ARTWORK');
+    await copyArtworkFromBaseUrl(trackData.artworkUrl);
   }
 
   function getArtworkUrlFromTile(artworkEl) {
