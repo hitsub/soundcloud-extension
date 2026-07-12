@@ -124,10 +124,9 @@
     return true;
   }
 
-  if (!insertButton()) {
-    const observer = new MutationObserver(() => {
-      if (insertButton()) observer.disconnect();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
+  // React re-renders header__middle after initial load and can wipe out
+  // our injected button, so keep watching and reinsert whenever it's gone.
+  const observer = new MutationObserver(() => insertButton());
+  observer.observe(document.body, { childList: true, subtree: true });
+  insertButton();
 })();
