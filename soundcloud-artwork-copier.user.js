@@ -189,6 +189,7 @@
       ['INAM', fields.title],
       ['IART', fields.artist],
       ['IPRD', fields.album],
+      ['IGNR', fields.genre],
     ];
     const parts = [];
     for (const [id, value] of entries) {
@@ -217,6 +218,7 @@
       title: existingValues.INAM || fields.title,
       artist: existingValues.IART || fields.artist,
       album: existingValues.IPRD || fields.album,
+      genre: existingValues.IGNR || fields.genre,
     };
     const newInfoChunk = buildInfoChunk(resolvedFields);
     const original = new Uint8Array(buffer);
@@ -311,7 +313,7 @@
       const frameStart = offset + 10;
       const frameData = bytes.subarray(frameStart, frameStart + frameSize);
 
-      if (frameId === 'TIT2' || frameId === 'TALB' || frameId === 'TPE1') {
+      if (frameId === 'TIT2' || frameId === 'TALB' || frameId === 'TPE1' || frameId === 'TCON') {
         result[frameId] = decodeId3Text(frameData);
       } else if (frameId === 'APIC') {
         result.APIC = parseApicFrame(frameData);
@@ -342,6 +344,8 @@
     if (album) writer.setFrame('TALB', album);
     const artist = existing.TPE1 || fields.artist;
     if (artist) writer.setFrame('TPE1', [artist]);
+    const genre = existing.TCON || fields.genre;
+    if (genre) writer.setFrame('TCON', [genre]);
 
     if (existing.APIC) {
       const pic = existing.APIC.data;
@@ -434,6 +438,7 @@
     if (fields.title) comments.push(encoder.encode(`TITLE=${fields.title}`));
     if (fields.artist) comments.push(encoder.encode(`ARTIST=${fields.artist}`));
     if (fields.album) comments.push(encoder.encode(`ALBUM=${fields.album}`));
+    if (fields.genre) comments.push(encoder.encode(`GENRE=${fields.genre}`));
 
     const le32 = (n) => {
       const buf = new Uint8Array(4);
@@ -478,6 +483,7 @@
       title: existingValues.TITLE || fields.title,
       artist: existingValues.ARTIST || fields.artist,
       album: existingValues.ALBUM || fields.album,
+      genre: existingValues.GENRE || fields.genre,
     });
 
     let pictureBlockBytes = null;
@@ -547,6 +553,7 @@
       title: sound.title || 'track',
       artist: sound.user?.username || sound.user?.full_name || '',
       artworkUrl: sound.artwork_url || null,
+      genre: sound.genre || '',
     };
   }
 
@@ -639,12 +646,14 @@
         title: trackData.title,
         artist: trackData.artist,
         album: trackData.title,
+        genre: trackData.genre,
       });
     } else if (format === 'mp3') {
       buffer = await mergeMp3Metadata(buffer, {
         title: trackData.title,
         artist: trackData.artist,
         album: trackData.title,
+        genre: trackData.genre,
         artworkUrl: trackData.artworkUrl,
       });
     } else if (format === 'flac') {
@@ -652,6 +661,7 @@
         title: trackData.title,
         artist: trackData.artist,
         album: trackData.title,
+        genre: trackData.genre,
         artworkUrl: trackData.artworkUrl,
       });
     }
