@@ -992,7 +992,13 @@
         if (rowEl.querySelector(`.${TILE_BUTTON_CLASS}`)) return;
         const artworkEl = config.findArtwork(rowEl);
         if (!artworkEl) return;
-        rowEl.appendChild(createTileButton(artworkEl, config.buttonClasses, config.withShadow));
+        const button = createTileButton(artworkEl, config.buttonClasses, config.withShadow);
+        const moreButton = rowEl.querySelector('.sc-button-more');
+        if (moreButton) {
+          rowEl.insertBefore(button, moreButton);
+        } else {
+          rowEl.appendChild(button);
+        }
       });
     }
   }
