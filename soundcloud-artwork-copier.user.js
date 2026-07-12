@@ -14,6 +14,7 @@
   const BUTTON_CLASS = 'scArtworkCopy__button';
   const TILE_BUTTON_CLASS = 'scArtworkCopy__tileButton';
   const TILE_SHADOW_CLASS = 'scArtworkCopy__tileButton--onArtwork';
+  const DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__downloadButton';
   const STATE_SUCCESS_CLASS = 'scArtworkCopy--success';
   const STATE_FAILURE_CLASS = 'scArtworkCopy--failure';
   const STATE_LOADING_CLASS = 'scArtworkCopy--loading';
@@ -507,15 +508,53 @@
     }
   }
 
+  function createDownloadButton(dropdownEl) {
+    // Matches the native "Download file" button's classes so it lines up
+    // with it visually; deliberately omits "sc-button-download" itself
+    // since that class is presumably also a JS behavior hook on the site.
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `sc-button-secondary sc-button moreActions__button sc-button-medium sc-button-tertiary ${DOWNLOAD_BUTTON_CLASS}`;
+    button.title = 'Download file with metadata';
+    button.setAttribute('aria-label', 'Download file with metadata');
+
+    const iconWrapper = document.createElement('div');
+    iconWrapper.innerHTML = ICON_DOWNLOAD;
+    button._iconTarget = iconWrapper;
+
+    const label = document.createElement('span');
+    label.className = 'sc-button-label';
+    label.textContent = 'Download file with metadata';
+
+    button.append(iconWrapper, label);
+    attachCopyHandler(button, () => downloadFileWithMetadata(dropdownEl));
+    return button;
+  }
+
+  function insertDownloadButtons() {
+    document.querySelectorAll('.moreActions__group').forEach((groupEl) => {
+      if (groupEl.querySelector(`.${DOWNLOAD_BUTTON_CLASS}`)) return;
+      const nativeDownloadButton = groupEl.querySelector('.sc-button-download');
+      if (!nativeDownloadButton) return;
+      const dropdownEl = groupEl.closest('.dropdownMenu');
+      if (!dropdownEl) return;
+      nativeDownloadButton.insertAdjacentElement('afterend', createDownloadButton(dropdownEl));
+    });
+  }
+
   // React re-renders header__middle after initial load and can wipe out
   // our injected button, so keep watching and reinsert whenever it's gone.
   // Likes/playlist lists are also lazy-loaded and append new tiles as the
   // user scrolls, so the same observer keeps those overlay buttons in sync.
+  // "More" dropdowns are portaled in fresh each time they're opened, so
+  // this also catches those as they appear.
   const observer = new MutationObserver(() => {
     insertButton();
     insertTileButtons();
+    insertDownloadButtons();
   });
   observer.observe(document.body, { childList: true, subtree: true });
   insertButton();
   insertTileButtons();
+  insertDownloadButtons();
 })();
