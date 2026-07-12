@@ -56,28 +56,32 @@
   `;
   document.head.appendChild(style);
 
-  function getMetaContent(property) {
-    const meta = document.querySelector(`meta[property="${property}"]`);
-    return meta ? meta.getAttribute('content') : null;
-  }
-
-  function isTrackPage() {
-    return getMetaContent('og:type') === 'music.song';
-  }
-
   function getHighResUrl(baseUrl) {
     return baseUrl.replace(/-t\d+x\d+(?=\.\w+$)/, '-original');
   }
 
-  function resolveArtworkUrls() {
-    if (!isTrackPage()) return null;
-    const baseUrl = getMetaContent('og:image');
-    if (!baseUrl) return null;
-    return { highRes: getHighResUrl(baseUrl), fallback: baseUrl };
+  async function fetchCurrentPageMeta() {
+    // SoundCloud is an SPA: navigating between tracks updates the URL via
+    // pushState but never touches the <meta> tags left over from the page
+    // that was first loaded. Re-fetch the current URL's HTML fresh so we
+    // always read the meta tags for the track actually being viewed.
+    const response = await fetch(location.href, { credentials: 'same-origin' });
+    const html = await response.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return {
+      ogType: doc.querySelector('meta[property="og:type"]')?.getAttribute('content') ?? null,
+      ogImage: doc.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? null,
+    };
+  }
+
+  async function resolveArtworkUrls() {
+    const meta = await fetchCurrentPageMeta();
+    if (meta.ogType !== 'music.song' || !meta.ogImage) return null;
+    return { highRes: getHighResUrl(meta.ogImage), fallback: meta.ogImage };
   }
 
   async function copyArtwork() {
-    const urls = resolveArtworkUrls();
+    const urls = await resolveArtworkUrls();
     if (!urls) throw new Error('Not a track page');
 
     let response = await fetch(urls.highRes);
