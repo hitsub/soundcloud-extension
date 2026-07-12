@@ -23,12 +23,16 @@
   const style = document.createElement('style');
   style.textContent = `
     .${BUTTON_CLASS} {
+      position: absolute;
+      top: 50%;
+      left: 100%;
+      margin-left: 8px;
+      transform: translateY(-50%);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       width: 32px;
       height: 32px;
-      margin-left: 8px;
       padding: 0;
       border: none;
       border-radius: 3px;
@@ -119,8 +123,12 @@
     const searchContainer = document.querySelector('.header__middle .header__search[role="search"]');
     if (!searchContainer) return false;
 
+    if (getComputedStyle(searchContainer).position === 'static') {
+      searchContainer.style.position = 'relative';
+    }
+
     const button = createButton();
-    searchContainer.insertAdjacentElement('afterend', button);
+    searchContainer.appendChild(button);
     return true;
   }
 
