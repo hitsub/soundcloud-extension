@@ -14,11 +14,13 @@
   const BUTTON_CLASS = 'scArtworkCopy__button';
   const STATE_SUCCESS_CLASS = `${BUTTON_CLASS}--success`;
   const STATE_FAILURE_CLASS = `${BUTTON_CLASS}--failure`;
+  const STATE_LOADING_CLASS = `${BUTTON_CLASS}--loading`;
   const FEEDBACK_DURATION_MS = 1500;
 
   const ICON_IDLE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M9 2a1 1 0 0 0-1 1v1H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V3a1 1 0 0 0-1-1H9Zm0 2h6v2H9V4ZM6 6h2v2h8V6h2v14H6V6Z"/></svg>';
   const ICON_SUCCESS = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19l12-12-1.41-1.41z"/></svg>';
   const ICON_FAILURE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41L10.59 13.42l-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"/></svg>';
+  const ICON_LOADING = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
 
   const style = document.createElement('style');
   style.textContent = `
@@ -52,6 +54,13 @@
     }
     .${STATE_FAILURE_CLASS} {
       color: #e74c3c;
+    }
+    .${STATE_LOADING_CLASS} svg {
+      animation: scArtworkCopySpin 0.8s linear infinite;
+    }
+    @keyframes scArtworkCopySpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
   `;
   document.head.appendChild(style);
@@ -111,11 +120,25 @@
     button.setAttribute('aria-label', 'Copy artwork');
     button.innerHTML = ICON_IDLE;
     button.addEventListener('click', () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      clearTimeout(button._feedbackTimer);
+      button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
+      button.classList.add(STATE_LOADING_CLASS);
+      button.innerHTML = ICON_LOADING;
+
       copyArtwork()
-        .then(() => showFeedback(button, true))
+        .then(() => {
+          button.classList.remove(STATE_LOADING_CLASS);
+          showFeedback(button, true);
+        })
         .catch((err) => {
           console.error('[SC Artwork Copier]', err);
+          button.classList.remove(STATE_LOADING_CLASS);
           showFeedback(button, false);
+        })
+        .finally(() => {
+          button.disabled = false;
         });
     });
     return button;
