@@ -51,30 +51,7 @@
       height: 20px;
     }
     .${TILE_BUTTON_CLASS} {
-      position: absolute;
-      right: 4px;
-      bottom: 4px;
-      width: 24px;
-      height: 24px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      border: none;
-      border-radius: 50%;
-      background: rgba(0, 0, 0, 0.6);
       color: #ff5500;
-      cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.15s ease;
-      z-index: 10;
-    }
-    .playableTile__artwork:hover .${TILE_BUTTON_CLASS} {
-      opacity: 1;
-    }
-    .${TILE_BUTTON_CLASS} svg {
-      width: 14px;
-      height: 14px;
     }
     .${STATE_SUCCESS_CLASS} {
       color: #2ecc71;
@@ -142,14 +119,18 @@
     await copyArtworkFromBaseUrl(baseUrl);
   }
 
+  function setIcon(button, svg) {
+    (button._iconTarget || button).innerHTML = svg;
+  }
+
   function showFeedback(button, isSuccess) {
     clearTimeout(button._feedbackTimer);
     button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
     button.classList.add(isSuccess ? STATE_SUCCESS_CLASS : STATE_FAILURE_CLASS);
-    button.innerHTML = isSuccess ? ICON_SUCCESS : ICON_FAILURE;
+    setIcon(button, isSuccess ? ICON_SUCCESS : ICON_FAILURE);
     button._feedbackTimer = setTimeout(() => {
       button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
-      button.innerHTML = ICON_IDLE;
+      setIcon(button, ICON_IDLE);
     }, FEEDBACK_DURATION_MS);
   }
 
@@ -162,7 +143,7 @@
       clearTimeout(button._feedbackTimer);
       button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
       button.classList.add(STATE_LOADING_CLASS);
-      button.innerHTML = ICON_LOADING;
+      setIcon(button, ICON_LOADING);
 
       copyFn()
         .then(() => {
@@ -203,20 +184,34 @@
   }
 
   function createTileButton(artworkEl) {
+    // Matches the structure/classes of the native Like/Follow/More buttons
+    // in .playableTile__actionWrapper so it lines up with them visually and
+    // inherits their existing hover-to-reveal behavior for free.
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = TILE_BUTTON_CLASS;
+    button.className = `playableTile__actionButton sc-button sc-button-small sc-button-icon ${TILE_BUTTON_CLASS}`;
     button.title = 'Copy artwork';
     button.setAttribute('aria-label', 'Copy artwork');
-    button.innerHTML = ICON_IDLE;
+
+    const iconWrapper = document.createElement('div');
+    iconWrapper.innerHTML = ICON_IDLE;
+    button._iconTarget = iconWrapper;
+
+    const label = document.createElement('span');
+    label.className = 'sc-button-label sc-visuallyhidden';
+    label.textContent = 'Copy artwork';
+
+    button.append(iconWrapper, label);
     attachCopyHandler(button, () => copyArtworkFromTile(artworkEl));
     return button;
   }
 
   function insertTileButtons() {
-    document.querySelectorAll('.playableTile__artwork').forEach((artworkEl) => {
-      if (artworkEl.querySelector(`.${TILE_BUTTON_CLASS}`)) return;
-      artworkEl.appendChild(createTileButton(artworkEl));
+    document.querySelectorAll('.playableTile__actionWrapper').forEach((wrapperEl) => {
+      if (wrapperEl.querySelector(`.${TILE_BUTTON_CLASS}`)) return;
+      const artworkEl = wrapperEl.closest('.playableTile__artwork');
+      if (!artworkEl) return;
+      wrapperEl.appendChild(createTileButton(artworkEl));
     });
   }
 
