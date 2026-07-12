@@ -1,0 +1,14 @@
+# SoundCloud Artwork Copier
+
+Tampermonkeyユーザースクリプト。SoundCloudのトラックページのヘッダー、検索ボックスの右にボタンを追加し、クリックするとそのトラックのジャケット画像をクリップボードにコピーする。
+
+## インストール
+
+1. Tampermonkeyをインストールする。
+2. Tampermonkeyのダッシュボードで「新規スクリプトを作成」を選び、`soundcloud-artwork-copier.user.js`の内容を貼り付けて保存する。
+3. `soundcloud.com`のトラックページを開くと、ヘッダーの検索ボックスの右にボタンが表示される。
+
+## 動作条件
+
+- ログイン済みのSoundCloudヘッダーを対象とする。
+- トラック単体ページ（`og:type` が `music.song`）でのみ機能する。プレイリストやプロフィールページではボタンを押すと失敗表示になる。
