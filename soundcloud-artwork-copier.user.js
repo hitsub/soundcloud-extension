@@ -54,7 +54,7 @@
       color: #ff5500;
     }
     .${TILE_BUTTON_CLASS} svg {
-      filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+      filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
     }
     .${STATE_SUCCESS_CLASS} {
       color: #2ecc71;
