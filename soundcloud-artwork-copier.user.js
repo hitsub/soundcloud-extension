@@ -23,6 +23,7 @@
   const ICON_SUCCESS = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19l12-12-1.41-1.41z"/></svg>';
   const ICON_FAILURE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41L10.59 13.42l-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"/></svg>';
   const ICON_LOADING = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
+  const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7ZM5 18v2h14v-2H5Z"/></svg>';
 
   const style = document.createElement('style');
   style.textContent = `
@@ -233,6 +234,155 @@
     // needs correcting whenever the file's total length changes.
     new DataView(spliced.buffer).setUint32(4, spliced.byteLength - 8, true);
     return spliced.buffer;
+  }
+
+  function extractHydrationJson(html) {
+    // window.__sc_hydration is one large embedded JSON array. A naive
+    // regex up to the first "];" breaks on track titles that contain
+    // literal brackets (e.g. "[Buzz's Mix n Mash]"), so bracket-match by
+    // hand while staying aware of string literals.
+    const marker = 'window.__sc_hydration = ';
+    const start = html.indexOf(marker);
+    if (start === -1) return null;
+    const jsonStart = start + marker.length;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = jsonStart; i < html.length; i++) {
+      const ch = html[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === '[') depth++;
+      else if (ch === ']') {
+        depth--;
+        if (depth === 0) {
+          try {
+            return JSON.parse(html.slice(jsonStart, i + 1));
+          } catch {
+            return null;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function getHydrationEntry(hydration, key) {
+    return hydration?.find((entry) => entry.hydratable === key)?.data ?? null;
+  }
+
+  async function fetchTrackData(url) {
+    // Same staleness concern as fetchCurrentPageMeta: SPA navigation never
+    // updates window.__sc_hydration for the newly-viewed track, so always
+    // re-fetch the target track's own page fresh.
+    const response = await fetch(url, { credentials: 'same-origin' });
+    const html = await response.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const ogType = doc.querySelector('meta[property="og:type"]')?.getAttribute('content');
+    if (ogType !== 'music.song') throw new Error('Not a track page');
+
+    const sound = getHydrationEntry(extractHydrationJson(html), 'sound');
+    if (!sound?.id) throw new Error('Could not read track data');
+
+    return {
+      id: sound.id,
+      title: sound.title || doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 'track',
+      artist: sound.user?.username || sound.user?.full_name || '',
+    };
+  }
+
+  function getSessionCredentials() {
+    // Unlike the track id, client_id/app_version are session-level, not
+    // per-track, so the live page's own globals are always current.
+    const clientId = getHydrationEntry(window.__sc_hydration, 'apiClient')?.id;
+    const appVersion = window.__sc_version;
+    if (!clientId || !appVersion) throw new Error('Missing session credentials');
+    return { clientId, appVersion };
+  }
+
+  async function fetchDownloadFile(trackId) {
+    const { clientId, appVersion } = getSessionCredentials();
+    const apiUrl = `https://api-v2.soundcloud.com/tracks/${trackId}/download?client_id=${encodeURIComponent(clientId)}&app_version=${encodeURIComponent(appVersion)}&app_locale=en`;
+    const apiResponse = await fetch(apiUrl, { credentials: 'include' });
+    if (!apiResponse.ok) throw new Error(`Failed to get download URL: ${apiResponse.status}`);
+    const { redirectUri } = await apiResponse.json();
+    if (!redirectUri) throw new Error('No download URL returned');
+
+    const fileResponse = await fetch(redirectUri);
+    if (!fileResponse.ok) throw new Error(`Failed to download file: ${fileResponse.status}`);
+    return {
+      buffer: await fileResponse.arrayBuffer(),
+      contentType: fileResponse.headers.get('content-type') || '',
+    };
+  }
+
+  function detectAudioFormat(buffer) {
+    const bytes = new Uint8Array(buffer, 0, 12);
+    const riff = String.fromCharCode(...bytes.subarray(0, 4));
+    const wave = String.fromCharCode(...bytes.subarray(8, 12));
+    return riff === 'RIFF' && wave === 'WAVE' ? 'wav' : 'other';
+  }
+
+  function guessExtension(format, contentType) {
+    if (format === 'wav') return 'wav';
+    if (contentType.includes('mp4') || contentType.includes('m4a')) return 'm4a';
+    if (contentType.includes('flac')) return 'flac';
+    return 'mp3';
+  }
+
+  function sanitizeFilename(name) {
+    return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'track';
+  }
+
+  function resolveTrackPermalink(dropdownEl) {
+    // Dropdowns are portaled away from the tile/row that opened them, so
+    // they can't be found by DOM proximity. The trigger button links back
+    // to its dropdown via aria-owns; from there, walk up to the tile/row
+    // that owns the trigger and read the track link straight from it.
+    // On the track's own hero page there's no such tile/row, so falling
+    // back to the current page's URL is exactly the right answer there.
+    const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
+    const scope = trigger?.closest('.playableTile, .sound__body') ?? null;
+    const link = scope?.querySelector('.playableTile__artworkLink, .sound__coverArt');
+    const href = link?.getAttribute('href');
+    return href ? new URL(href, location.origin).href : location.href;
+  }
+
+  function triggerFileDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  async function downloadFileWithMetadata(dropdownEl) {
+    const trackUrl = resolveTrackPermalink(dropdownEl);
+    const trackData = await fetchTrackData(trackUrl);
+    let { buffer, contentType } = await fetchDownloadFile(trackData.id);
+
+    const format = detectAudioFormat(buffer);
+    if (format === 'wav') {
+      buffer = mergeWavMetadata(buffer, {
+        title: trackData.title,
+        artist: trackData.artist,
+        album: trackData.title,
+      });
+    }
+    // Non-WAV formats (mp3, etc.) download unmodified for now; ID3 tagging
+    // support is planned as a follow-up.
+
+    const blob = new Blob([buffer]);
+    triggerFileDownload(blob, `${sanitizeFilename(trackData.title)}.${guessExtension(format, contentType)}`);
   }
 
   function setIcon(button, svg) {
