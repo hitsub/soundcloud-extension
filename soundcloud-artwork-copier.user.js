@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         SoundCloud Artwork Copier & Metadata Downloader
+// @name         SoundCloud Menu Extension
 // @namespace    https://github.com/hitsub/sc-jacket-extensions
 // @version      0.2.0
 // @description  Copy track artwork from the header, track tiles/rows, or the More menu, and download files with missing title/artist/album/artwork tags filled in automatically (WAV/MP3/FLAC)

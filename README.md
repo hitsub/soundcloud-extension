@@ -1,4 +1,4 @@
-# SoundCloud Artwork Copier & Metadata Downloader
+# SoundCloud Menu Extension
 
 Tampermonkeyユーザースクリプト。SoundCloud上でジャケット画像をクリップボードにコピーする機能と、ダウンロードしたファイルにタイトル・アーティスト・アルバム・ジャンル・ジャケット画像のタグを自動で埋め込む機能を追加する。
 
