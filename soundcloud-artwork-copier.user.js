@@ -60,6 +60,18 @@
     return { highRes: getHighResUrl(baseUrl), fallback: baseUrl };
   }
 
+  async function copyArtwork() {
+    const urls = resolveArtworkUrls();
+    if (!urls) throw new Error('Not a track page');
+
+    let response = await fetch(urls.highRes);
+    if (!response.ok) response = await fetch(urls.fallback);
+    if (!response.ok) throw new Error(`Failed to fetch artwork: ${response.status}`);
+
+    const blob = await response.blob();
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+  }
+
   function createButton() {
     const button = document.createElement('button');
     button.type = 'button';
@@ -67,6 +79,9 @@
     button.title = 'Copy artwork';
     button.setAttribute('aria-label', 'Copy artwork');
     button.innerHTML = ICON_IDLE;
+    button.addEventListener('click', () => {
+      copyArtwork().catch((err) => console.error('[SC Artwork Copier]', err));
+    });
     return button;
   }
 
