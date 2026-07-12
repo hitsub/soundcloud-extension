@@ -6,14 +6,107 @@
 // @author       hitsub
 // @match        *://soundcloud.com/*
 // @grant        none
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
   'use strict';
 
+  const downloadableByPath = new Map();
+
+  function permalinkPath(url) {
+    try {
+      return new URL(url, location.origin).pathname.replace(/\/$/, '');
+    } catch {
+      return null;
+    }
+  }
+
+  function recordDownloadableInfo(value, depth = 0) {
+    // Generic recursive scan rather than hard-coding every api-v2 response
+    // shape (stream/likes/playlist/search collections all nest track
+    // objects differently) — any object with both fields is a track.
+    if (!value || typeof value !== 'object' || depth > 6) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => recordDownloadableInfo(item, depth + 1));
+      return;
+    }
+    if (typeof value.permalink_url === 'string' && typeof value.downloadable === 'boolean') {
+      const path = permalinkPath(value.permalink_url);
+      if (path) downloadableByPath.set(path, value.downloadable);
+    }
+    for (const key of Object.keys(value)) {
+      recordDownloadableInfo(value[key], depth + 1);
+    }
+  }
+
+  function patchFetchForDownloadableInfo() {
+    // Passively read the JSON SoundCloud's own app already fetches to
+    // render track lists (stream/likes/playlists/search all go through
+    // api-v2), rather than issuing our own extra requests per visible
+    // track. @run-at document-start so this is installed before the page's
+    // own scripts start making these calls.
+    const nativeFetch = window.fetch;
+    if (typeof nativeFetch !== 'function') return;
+    window.fetch = function (...args) {
+      const result = nativeFetch.apply(this, args);
+      const urlArg = args[0];
+      const url = typeof urlArg === 'string' ? urlArg : urlArg?.url;
+      if (url && url.includes('api-v2.soundcloud.com')) {
+        result
+          .then((response) => response.clone().json())
+          .then((json) => {
+            recordDownloadableInfo(json);
+            highlightDownloadableTriggers();
+          })
+          .catch(() => {});
+      }
+      return result;
+    };
+  }
+  patchFetchForDownloadableInfo();
+
+  function patchXhrForDownloadableInfo() {
+    // SoundCloud's own list-loading requests (e.g. track_likes) turn out to
+    // go through XMLHttpRequest rather than fetch, so that needs the same
+    // passive-read treatment.
+    const nativeOpen = XMLHttpRequest.prototype.open;
+    const nativeSend = XMLHttpRequest.prototype.send;
+    if (typeof nativeOpen !== 'function' || typeof nativeSend !== 'function') return;
+
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      this._scExtUrl = url;
+      return nativeOpen.call(this, method, url, ...rest);
+    };
+
+    XMLHttpRequest.prototype.send = function (...args) {
+      if (typeof this._scExtUrl === 'string' && this._scExtUrl.includes('api-v2.soundcloud.com')) {
+        this.addEventListener('load', () => {
+          try {
+            recordDownloadableInfo(JSON.parse(this.responseText));
+            highlightDownloadableTriggers();
+          } catch {
+            // Not JSON, or not a shape we care about — ignore.
+          }
+        });
+      }
+      return nativeSend.apply(this, args);
+    };
+  }
+  patchXhrForDownloadableInfo();
+
+  function whenDomReady(callback) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', callback, { once: true });
+    } else {
+      callback();
+    }
+  }
+
   const TILE_BUTTON_CLASS = 'scArtworkCopy__tileButton';
   const TILE_SHADOW_CLASS = 'scArtworkCopy__tileButton--onArtwork';
   const DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__downloadButton';
+  const MORE_BUTTON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownload';
   const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
   const TOAST_CLASS = 'scArtworkCopy__toast';
   const TOAST_VISIBLE_CLASS = 'scArtworkCopy__toast--visible';
@@ -49,11 +142,18 @@
       color: #ff5500 !important;
       fill: #ff5500 !important;
     }
+    .${MORE_BUTTON_HIGHLIGHT_CLASS},
+    .${MORE_BUTTON_HIGHLIGHT_CLASS} svg,
+    .${MORE_BUTTON_HIGHLIGHT_CLASS} svg * {
+      color: #ff5500 !important;
+      fill: #ff5500 !important;
+    }
     /* Our forced color/fill above blocks the native buttons' own :hover
        fade, so re-add the same fade explicitly to stay consistent with
        sibling buttons (Like/Follow/More etc.) on hover. */
     .${TILE_BUTTON_CLASS}:hover,
-    .${DOWNLOAD_BUTTON_CLASS}:hover {
+    .${DOWNLOAD_BUTTON_CLASS}:hover,
+    .${MORE_BUTTON_HIGHLIGHT_CLASS}:hover {
       opacity: 0.7 !important;
     }
     .${STATE_SUCCESS_CLASS},
@@ -112,7 +212,6 @@
       transform: translateY(0);
     }
   `;
-  document.head.appendChild(style);
 
   const ERROR_MESSAGES = {
     NOT_TRACK_PAGE: {
@@ -762,18 +861,35 @@
     return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'track';
   }
 
+  function permalinkFromScope(triggerEl) {
+    // On the track's own hero page there's no tile/row wrapping the
+    // trigger, so falling back to the current page's URL is exactly the
+    // right answer there.
+    const scope = triggerEl?.closest('.playableTile, .sound__body') ?? null;
+    const link = scope?.querySelector('.playableTile__artworkLink, .sound__coverArt');
+    const href = link?.getAttribute('href');
+    return href ? new URL(href, location.origin).href : location.href;
+  }
+
   function resolveTrackPermalink(dropdownEl) {
     // Dropdowns are portaled away from the tile/row that opened them, so
     // they can't be found by DOM proximity. The trigger button links back
     // to its dropdown via aria-owns; from there, walk up to the tile/row
     // that owns the trigger and read the track link straight from it.
-    // On the track's own hero page there's no such tile/row, so falling
-    // back to the current page's URL is exactly the right answer there.
     const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
-    const scope = trigger?.closest('.playableTile, .sound__body') ?? null;
-    const link = scope?.querySelector('.playableTile__artworkLink, .sound__coverArt');
-    const href = link?.getAttribute('href');
-    return href ? new URL(href, location.origin).href : location.href;
+    return permalinkFromScope(trigger);
+  }
+
+  function highlightDownloadableTriggers() {
+    // Complements insertDownloadButtons()'s open-then-highlight fallback:
+    // this fires as soon as passively-collected data says a track is
+    // downloadable, even before its "More" button has ever been opened.
+    if (downloadableByPath.size === 0) return;
+    document.querySelectorAll('.sc-button-more').forEach((trigger) => {
+      if (trigger.classList.contains(MORE_BUTTON_HIGHLIGHT_CLASS)) return;
+      const path = permalinkPath(permalinkFromScope(trigger));
+      if (path && downloadableByPath.get(path)) trigger.classList.add(MORE_BUTTON_HIGHLIGHT_CLASS);
+    });
   }
 
   function triggerFileDownload(blob, filename) {
@@ -1006,26 +1122,49 @@
 
   function insertDownloadButtons() {
     document.querySelectorAll('.moreActions__group').forEach((groupEl) => {
-      if (groupEl.querySelector(`.${DOWNLOAD_BUTTON_CLASS}`)) return;
       const nativeDownloadButton = groupEl.querySelector('.sc-button-download');
       if (!nativeDownloadButton) return;
       const dropdownEl = groupEl.closest('.dropdownMenu');
       if (!dropdownEl) return;
+
+      // Download availability is only knowable once the dropdown has been
+      // opened (it's portaled in fresh each time), so mark the trigger
+      // button here rather than up front — same aria-owns correlation
+      // resolveTrackPermalink() uses. The trigger stays in the DOM as long
+      // as its tile/row does, so the highlight persists after the dropdown
+      // closes.
+      const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
+      trigger?.classList.add(MORE_BUTTON_HIGHLIGHT_CLASS);
+
+      if (groupEl.querySelector(`.${DOWNLOAD_BUTTON_CLASS}`)) return;
       nativeDownloadButton.insertAdjacentElement('afterend', createDownloadButton(dropdownEl));
     });
   }
 
-  // React re-renders wipe out our injected buttons, so keep watching and
-  // reinsert whenever they're gone. Likes/playlist lists are also
-  // lazy-loaded and append new tiles as the user scrolls, so the same
-  // observer keeps those overlay buttons in sync. "More" dropdowns are
-  // portaled in fresh each time they're opened, so this also catches those
-  // as they appear.
-  const observer = new MutationObserver(() => {
+  whenDomReady(() => {
+    document.head.appendChild(style);
+
+    // The initial page load's track list (e.g. the first batch of /likes)
+    // is often embedded directly in this hydration payload rather than
+    // fetched via a subsequent AJAX call our fetch patch could observe, so
+    // scan it once up front too. It doesn't update on SPA navigation, but
+    // by then the fetch patch is already catching fresh data as it loads.
+    recordDownloadableInfo(window.__sc_hydration);
+
+    // React re-renders wipe out our injected buttons, so keep watching and
+    // reinsert whenever they're gone. Likes/playlist lists are also
+    // lazy-loaded and append new tiles as the user scrolls, so the same
+    // observer keeps those overlay buttons in sync. "More" dropdowns are
+    // portaled in fresh each time they're opened, so this also catches
+    // those as they appear.
+    const observer = new MutationObserver(() => {
+      insertTileButtons();
+      insertDownloadButtons();
+      highlightDownloadableTriggers();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     insertTileButtons();
     insertDownloadButtons();
+    highlightDownloadableTriggers();
   });
-  observer.observe(document.body, { childList: true, subtree: true });
-  insertTileButtons();
-  insertDownloadButtons();
 })();
