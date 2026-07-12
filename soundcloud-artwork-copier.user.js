@@ -55,6 +55,9 @@
     .${STATE_FAILURE_CLASS} {
       color: #e74c3c;
     }
+    .${STATE_LOADING_CLASS} {
+      color: #999;
+    }
     .${STATE_LOADING_CLASS} svg {
       animation: scArtworkCopySpin 0.8s linear infinite;
     }
