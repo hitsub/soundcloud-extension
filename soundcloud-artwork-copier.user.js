@@ -12,7 +12,13 @@
   'use strict';
 
   const BUTTON_CLASS = 'scArtworkCopy__button';
+  const STATE_SUCCESS_CLASS = `${BUTTON_CLASS}--success`;
+  const STATE_FAILURE_CLASS = `${BUTTON_CLASS}--failure`;
+  const FEEDBACK_DURATION_MS = 1500;
+
   const ICON_IDLE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M9 2a1 1 0 0 0-1 1v1H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V3a1 1 0 0 0-1-1H9Zm0 2h6v2H9V4ZM6 6h2v2h8V6h2v14H6V6Z"/></svg>';
+  const ICON_SUCCESS = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19l12-12-1.41-1.41z"/></svg>';
+  const ICON_FAILURE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41L10.59 13.42l-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"/></svg>';
 
   const style = document.createElement('style');
   style.textContent = `
@@ -36,6 +42,12 @@
     .${BUTTON_CLASS} svg {
       width: 20px;
       height: 20px;
+    }
+    .${STATE_SUCCESS_CLASS} {
+      color: #2ecc71;
+    }
+    .${STATE_FAILURE_CLASS} {
+      color: #e74c3c;
     }
   `;
   document.head.appendChild(style);
@@ -72,6 +84,17 @@
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
   }
 
+  function showFeedback(button, isSuccess) {
+    clearTimeout(button._feedbackTimer);
+    button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
+    button.classList.add(isSuccess ? STATE_SUCCESS_CLASS : STATE_FAILURE_CLASS);
+    button.innerHTML = isSuccess ? ICON_SUCCESS : ICON_FAILURE;
+    button._feedbackTimer = setTimeout(() => {
+      button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
+      button.innerHTML = ICON_IDLE;
+    }, FEEDBACK_DURATION_MS);
+  }
+
   function createButton() {
     const button = document.createElement('button');
     button.type = 'button';
@@ -80,7 +103,12 @@
     button.setAttribute('aria-label', 'Copy artwork');
     button.innerHTML = ICON_IDLE;
     button.addEventListener('click', () => {
-      copyArtwork().catch((err) => console.error('[SC Artwork Copier]', err));
+      copyArtwork()
+        .then(() => showFeedback(button, true))
+        .catch((err) => {
+          console.error('[SC Artwork Copier]', err);
+          showFeedback(button, false);
+        });
     });
     return button;
   }
