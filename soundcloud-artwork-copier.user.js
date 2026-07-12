@@ -581,6 +581,9 @@
     const wave = bytes.length >= 12 ? String.fromCharCode(...bytes.subarray(8, 12)) : '';
     if (riff === 'RIFF' && wave === 'WAVE') return 'wav';
 
+    const isFlac = bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43; // "fLaC"
+    if (isFlac || contentType.includes('flac')) return 'flac';
+
     const isId3 = bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33; // "ID3"
     const isMpegSync = bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
     if (isId3 || isMpegSync || contentType.includes('mpeg')) return 'mp3';
@@ -591,8 +594,8 @@
   function guessExtension(format, contentType) {
     if (format === 'wav') return 'wav';
     if (format === 'mp3') return 'mp3';
+    if (format === 'flac') return 'flac';
     if (contentType.includes('mp4') || contentType.includes('m4a')) return 'm4a';
-    if (contentType.includes('flac')) return 'flac';
     return 'bin';
   }
 
@@ -644,9 +647,16 @@
         album: trackData.title,
         artworkUrl: trackData.artworkUrl,
       });
+    } else if (format === 'flac') {
+      buffer = await mergeFlacMetadata(buffer, {
+        title: trackData.title,
+        artist: trackData.artist,
+        album: trackData.title,
+        artworkUrl: trackData.artworkUrl,
+      });
     }
-    // Other formats (e.g. m4a/flac) download unmodified — no equivalent
-    // metadata support implemented for them yet.
+    // Other formats (e.g. m4a) download unmodified — no equivalent metadata
+    // support implemented for them yet.
 
     const blob = new Blob([buffer]);
     triggerFileDownload(blob, `${sanitizeFilename(trackData.title)}.${guessExtension(format, contentType)}`);
