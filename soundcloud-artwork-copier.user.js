@@ -109,9 +109,10 @@
   }
 
   function getArtworkUrlFromTile(artworkEl) {
-    // Both the wrapping <div> and the inner <span> carry the "sc-artwork"
-    // class, but only the <span> has the background-image inline style.
-    const span = artworkEl.querySelector('.playableTile__image span.sc-artwork');
+    // The wrapping <div> around the artwork also carries an "sc-artwork"
+    // class, but only the inner <span> has the background-image inline
+    // style, so scope the lookup to that span specifically.
+    const span = artworkEl.querySelector('span.sc-artwork');
     const match = span?.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/);
     return match ? match[1] : null;
   }
@@ -186,13 +187,14 @@
     return true;
   }
 
-  function createTileButton(artworkEl) {
-    // Matches the structure/classes of the native Like/Follow/More buttons
-    // in .playableTile__actionWrapper so it lines up with them visually and
-    // inherits their existing hover-to-reveal behavior for free.
+  function createTileButton(artworkEl, extraClasses) {
+    // Matches the structure/classes of the native action buttons alongside
+    // it (Like/Follow/More on grid tiles, Like/Repost/Share/... on list
+    // rows) so it lines up with them visually and inherits their existing
+    // sizing and hover-to-reveal behavior for free.
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = `playableTile__actionButton sc-button sc-button-small sc-button-icon ${TILE_BUTTON_CLASS}`;
+    button.className = `${extraClasses} ${TILE_BUTTON_CLASS}`;
     button.title = 'Copy artwork';
     button.setAttribute('aria-label', 'Copy artwork');
 
@@ -209,13 +211,33 @@
     return button;
   }
 
+  // Two distinct track layouts exist on the site: compact grid tiles
+  // (.playableTile__artwork + .playableTile__actionWrapper, e.g. on
+  // /you/likes' "Badges" view) and full list rows (.sound__artwork +
+  // .soundActions .sc-button-group, e.g. the "List" view / stream). Each
+  // needs its own artwork lookup and native button classes to match.
+  const ACTION_ROW_CONFIGS = [
+    {
+      rowSelector: '.playableTile__actionWrapper',
+      buttonClasses: 'playableTile__actionButton sc-button sc-button-small sc-button-icon',
+      findArtwork: (rowEl) => rowEl.closest('.playableTile__artwork'),
+    },
+    {
+      rowSelector: '.soundActions .sc-button-group',
+      buttonClasses: 'sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive',
+      findArtwork: (rowEl) => rowEl.closest('.sound__body')?.querySelector('.sound__artwork') ?? null,
+    },
+  ];
+
   function insertTileButtons() {
-    document.querySelectorAll('.playableTile__actionWrapper').forEach((wrapperEl) => {
-      if (wrapperEl.querySelector(`.${TILE_BUTTON_CLASS}`)) return;
-      const artworkEl = wrapperEl.closest('.playableTile__artwork');
-      if (!artworkEl) return;
-      wrapperEl.appendChild(createTileButton(artworkEl));
-    });
+    for (const config of ACTION_ROW_CONFIGS) {
+      document.querySelectorAll(config.rowSelector).forEach((rowEl) => {
+        if (rowEl.querySelector(`.${TILE_BUTTON_CLASS}`)) return;
+        const artworkEl = config.findArtwork(rowEl);
+        if (!artworkEl) return;
+        rowEl.appendChild(createTileButton(artworkEl, config.buttonClasses));
+      });
+    }
   }
 
   // React re-renders header__middle after initial load and can wipe out
