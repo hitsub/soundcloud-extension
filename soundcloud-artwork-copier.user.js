@@ -57,20 +57,39 @@
       width: 20px;
       height: 20px;
     }
-    .${TILE_BUTTON_CLASS} {
-      color: #ff5500;
+    .${TILE_BUTTON_CLASS},
+    .${TILE_BUTTON_CLASS} svg,
+    .${TILE_BUTTON_CLASS} svg * {
+      color: #ff5500 !important;
+      fill: #ff5500 !important;
     }
     .${TILE_SHADOW_CLASS} svg {
       filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
     }
-    .${STATE_SUCCESS_CLASS} {
-      color: #2ecc71;
+    .${DOWNLOAD_BUTTON_CLASS},
+    .${DOWNLOAD_BUTTON_CLASS} svg,
+    .${DOWNLOAD_BUTTON_CLASS} svg *,
+    .${DOWNLOAD_BUTTON_CLASS} .sc-button-label {
+      color: #ff5500 !important;
+      fill: #ff5500 !important;
     }
-    .${STATE_FAILURE_CLASS} {
-      color: #e74c3c;
+    .${STATE_SUCCESS_CLASS},
+    .${STATE_SUCCESS_CLASS} svg,
+    .${STATE_SUCCESS_CLASS} svg * {
+      color: #2ecc71 !important;
+      fill: #2ecc71 !important;
     }
-    .${STATE_LOADING_CLASS} {
-      color: #999;
+    .${STATE_FAILURE_CLASS},
+    .${STATE_FAILURE_CLASS} svg,
+    .${STATE_FAILURE_CLASS} svg * {
+      color: #e74c3c !important;
+      fill: #e74c3c !important;
+    }
+    .${STATE_LOADING_CLASS},
+    .${STATE_LOADING_CLASS} svg,
+    .${STATE_LOADING_CLASS} svg * {
+      color: #999 !important;
+      fill: #999 !important;
     }
     .${STATE_LOADING_CLASS} svg {
       animation: scArtworkCopySpin 0.8s linear infinite;
