@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SoundCloud Menu Extension
 // @namespace    https://github.com/hitsub/sc-jacket-extensions
-// @version      0.2.0
-// @description  Copy track artwork from the header, track tiles/rows, or the More menu, and download files with missing title/artist/album/artwork tags filled in automatically (WAV/MP3/FLAC)
+// @version      0.3.0
+// @description  Copy track artwork from track tiles/rows/the hero page, or the More menu, and download files with missing title/artist/album/artwork tags filled in automatically (WAV/MP3/FLAC)
 // @author       hitsub
 // @match        *://soundcloud.com/*
 // @grant        none
@@ -11,7 +11,6 @@
 (function () {
   'use strict';
 
-  const BUTTON_CLASS = 'scArtworkCopy__button';
   const TILE_BUTTON_CLASS = 'scArtworkCopy__tileButton';
   const TILE_SHADOW_CLASS = 'scArtworkCopy__tileButton--onArtwork';
   const DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__downloadButton';
@@ -34,31 +33,6 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .${BUTTON_CLASS} {
-      float: left;
-      position: relative;
-      top: 50%;
-      transform: translateY(-50%);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      margin-right: 8px;
-      padding: 0;
-      border: none;
-      border-radius: 3px;
-      background: transparent;
-      color: #ff5500;
-      cursor: pointer;
-    }
-    .${BUTTON_CLASS}:hover {
-      background: rgba(0, 0, 0, 0.05);
-    }
-    .${BUTTON_CLASS} svg {
-      width: 20px;
-      height: 20px;
-    }
     .${TILE_BUTTON_CLASS},
     .${TILE_BUTTON_CLASS} svg,
     .${TILE_BUTTON_CLASS} svg * {
@@ -917,29 +891,6 @@
     });
   }
 
-  function createButton() {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = BUTTON_CLASS;
-    button.title = 'Copy artwork';
-    button.setAttribute('aria-label', 'Copy artwork');
-    button.innerHTML = ICON_IDLE;
-    button._idleIcon = ICON_IDLE;
-    attachCopyHandler(button, copyArtwork);
-    return button;
-  }
-
-  function insertButton() {
-    if (document.querySelector(`.${BUTTON_CLASS}`)) return true;
-
-    const rightSection = document.querySelector('.header__right');
-    if (!rightSection) return false;
-
-    const button = createButton();
-    rightSection.insertBefore(button, rightSection.firstChild);
-    return true;
-  }
-
   function createTileButton(copyFn, extraClasses, withShadow, icon) {
     // Matches the structure/classes of the native action buttons alongside
     // it (Like/Follow/More on grid tiles, Like/Repost/Share/... on list
@@ -1064,19 +1015,17 @@
     });
   }
 
-  // React re-renders header__middle after initial load and can wipe out
-  // our injected button, so keep watching and reinsert whenever it's gone.
-  // Likes/playlist lists are also lazy-loaded and append new tiles as the
-  // user scrolls, so the same observer keeps those overlay buttons in sync.
-  // "More" dropdowns are portaled in fresh each time they're opened, so
-  // this also catches those as they appear.
+  // React re-renders wipe out our injected buttons, so keep watching and
+  // reinsert whenever they're gone. Likes/playlist lists are also
+  // lazy-loaded and append new tiles as the user scrolls, so the same
+  // observer keeps those overlay buttons in sync. "More" dropdowns are
+  // portaled in fresh each time they're opened, so this also catches those
+  // as they appear.
   const observer = new MutationObserver(() => {
-    insertButton();
     insertTileButtons();
     insertDownloadButtons();
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  insertButton();
   insertTileButtons();
   insertDownloadButtons();
 })();

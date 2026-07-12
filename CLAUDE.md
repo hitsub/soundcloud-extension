@@ -17,18 +17,16 @@ There is no way to execute or type-check this script outside a real browser (no 
 
 ## Architecture
 
-### Three feature areas, one shared button/feedback plumbing
+### Two feature areas, one shared button/feedback plumbing
 
-1. **Header artwork-copy button** (`insertButton`/`createButton`) — injected into `.header__right`, calls `copyArtwork()`.
-2. **Tile/row overlay artwork-copy button** (`insertTileButtons`/`createTileButton`) — injected next to the native Like/Follow/More (grid tiles) or Like/Repost/Share/Copy Link/More (list rows) buttons, positioned immediately before `.sc-button-more`. `ACTION_ROW_CONFIGS` holds the two distinct DOM shapes (`.playableTile__actionWrapper` for grid "Badges" view vs `.soundActions .sc-button-group` for "List" view) since SoundCloud renders the same track differently depending on view mode.
-3. **"Download file with metadata"** (`insertDownloadButtons`/`createDownloadButton`) — injected into `.moreActions__group` right after the native `.sc-button-download` button; calls `downloadFileWithMetadata()`.
+1. **Tile/row overlay artwork-copy button** (`insertTileButtons`/`createTileButton`) — injected next to the native Like/Follow/More (grid tiles), Like/Repost/Share/Copy Link/More (list rows), or Like/Repost/Share/Copy Link/More (the track's own hero page) buttons, positioned immediately before `.sc-button-more`. `ACTION_ROW_CONFIGS` holds three distinct DOM shapes (`.playableTile__actionWrapper` for grid "Badges" view, `.soundActions .sc-button-group` for "List" view, `.listenEngagement__footer .soundActions .sc-button-group` for the hero page) since SoundCloud renders the same track differently depending on context. The grid/list configs extract the artwork URL from the tile/row's own DOM (`copyArtworkFromTile`); the hero-page config instead reuses `copyArtwork()` (the api-v2-backed lookup, since there's no `.sound__body` tile/row to read artwork from there) and uses the same icon (`ICON_IDLE`) rather than the tile overlay's Font Awesome clipboard glyph.
+2. **"Download file with metadata"** (`insertDownloadButtons`/`createDownloadButton`) — injected into `.moreActions__group` right after the native `.sc-button-download` button; calls `downloadFileWithMetadata()`.
 
-All three share `attachCopyHandler()`, which drives a loading → success/failure icon state machine (`showFeedback`, `setIcon`) and pops a toast (`showToast`) with a localized failure reason on error. Each button remembers its own idle icon via `button._idleIcon` (don't let `showFeedback` hardcode one icon for all buttons — that was a real bug once).
+Both share `attachCopyHandler()`, which drives a loading → success/failure icon state machine (`showFeedback`, `setIcon`) and pops a toast (`showToast`) with a localized failure reason on error. Each button remembers its own idle icon via `button._idleIcon` (don't let `showFeedback` hardcode one icon for all buttons — that was a real bug once).
 
 ### SoundCloud is a React SPA — everything is re-injected continuously
 
-A single `MutationObserver` on `document.body` re-runs `insertButton`/`insertTileButtons`/`insertDownloadButtons` on every DOM mutation, because:
-- React re-renders `header__middle` after initial load and can wipe out the header button.
+A single `MutationObserver` on `document.body` re-runs `insertTileButtons`/`insertDownloadButtons` on every DOM mutation, because:
 - Track lists lazy-load more tiles/rows as the user scrolls.
 - "More" dropdown menus are portaled into the DOM fresh each time they're opened (not nested near the tile/row that opened them).
 
