@@ -203,7 +203,17 @@
   }
 
   function getHighResUrl(baseUrl) {
-    return baseUrl.replace(/-t\d+x\d+(?=\.\w+$)/, '-original');
+    // The web app's own rendered DOM uses "-t{width}x{height}" (e.g.
+    // -t500x500), but the /resolve API's artwork_url field uses SoundCloud's
+    // older "-large" convention instead — match either.
+    return baseUrl.replace(/-(?:t\d+x\d+|large)(?=\.\w+$)/, '-original');
+  }
+
+  async function convertBlobToPng(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    return canvas.convertToBlob({ type: 'image/png' });
   }
 
   async function copyArtworkFromBaseUrl(baseUrl) {
@@ -211,8 +221,12 @@
     if (!response.ok) response = await fetch(baseUrl);
     if (!response.ok) failWith('FETCH_ARTWORK_FAILED', { status: response.status });
 
-    const blob = await response.blob();
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    let blob = await response.blob();
+    // Only image/png is guaranteed writable to the clipboard; some
+    // artworks (particularly ones without a "-original" high-res variant)
+    // are served as image/jpeg, which some browsers reject outright.
+    if (blob.type !== 'image/png') blob = await convertBlobToPng(blob);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
   }
 
   async function copyArtwork() {
