@@ -208,8 +208,33 @@
     return concatBytes([chunkHeader, infoBody]);
   }
 
-  function mergeWavMetadata(buffer, fields) {
-    const chunks = parseWavChunks(buffer);
+  function buildRiffChunk(fourCC, data) {
+    const encoder = new TextEncoder();
+    const header = new Uint8Array(8);
+    header.set(encoder.encode(fourCC), 0);
+    new DataView(header.buffer).setUint32(4, data.length, true);
+    const padded = data.length % 2 === 0 ? data : concatBytes([data, new Uint8Array([0])]);
+    return concatBytes([header, padded]);
+  }
+
+  function spliceRiffChunk(buffer, existingChunk, newChunkBytes, fallbackInsertChunk) {
+    const original = new Uint8Array(buffer);
+    let spliced;
+    if (existingChunk) {
+      const chunkEnd = existingChunk.dataStart + existingChunk.size + (existingChunk.size % 2);
+      spliced = concatBytes([original.subarray(0, existingChunk.start), newChunkBytes, original.subarray(chunkEnd)]);
+    } else {
+      const insertAt = fallbackInsertChunk ? fallbackInsertChunk.start : original.length;
+      spliced = concatBytes([original.subarray(0, insertAt), newChunkBytes, original.subarray(insertAt)]);
+    }
+    // The top-level RIFF size field covers everything after itself, so it
+    // needs correcting whenever the file's total length changes.
+    new DataView(spliced.buffer).setUint32(4, spliced.byteLength - 8, true);
+    return spliced.buffer;
+  }
+
+  async function mergeWavMetadata(buffer, fields) {
+    let chunks = parseWavChunks(buffer);
     const existingInfo = findInfoChunk(buffer, chunks);
     const existingValues = existingInfo ? readInfoValues(buffer, existingInfo) : {};
 
@@ -220,23 +245,33 @@
       album: existingValues.IPRD || fields.album,
       genre: existingValues.IGNR || fields.genre,
     };
-    const newInfoChunk = buildInfoChunk(resolvedFields);
-    const original = new Uint8Array(buffer);
+    buffer = spliceRiffChunk(
+      buffer,
+      existingInfo,
+      buildInfoChunk(resolvedFields),
+      chunks.find((c) => c.id === 'data')
+    );
 
-    let spliced;
-    if (existingInfo) {
-      const chunkEnd = existingInfo.dataStart + existingInfo.size + (existingInfo.size % 2);
-      spliced = concatBytes([original.subarray(0, existingInfo.start), newInfoChunk, original.subarray(chunkEnd)]);
-    } else {
-      const dataChunk = chunks.find((c) => c.id === 'data');
-      const insertAt = dataChunk ? dataChunk.start : original.length;
-      spliced = concatBytes([original.subarray(0, insertAt), newInfoChunk, original.subarray(insertAt)]);
-    }
+    // WAV's own LIST/INFO chunk has no artwork convention, so artwork (and,
+    // redundantly, the same text fields for players that only read this
+    // chunk) goes into a non-standard but ffmpeg/mutagen-recognized "id3 "
+    // chunk holding a full ID3v2 tag — the same format/frames as the MP3
+    // path. Chunk offsets shift after the splice above, so re-parse first.
+    chunks = parseWavChunks(buffer);
+    const existingId3Chunk = chunks.find((c) => c.id.toLowerCase() === 'id3 ');
+    const existingId3Data = existingId3Chunk
+      ? buffer.slice(existingId3Chunk.dataStart, existingId3Chunk.dataStart + existingId3Chunk.size)
+      : null;
+    const existingId3 = existingId3Data ? parseExistingId3(existingId3Data) : {};
+    const id3Tag = await buildId3Tag(existingId3, { ...resolvedFields, artworkUrl: fields.artworkUrl }, new ArrayBuffer(0));
+    buffer = spliceRiffChunk(
+      buffer,
+      existingId3Chunk,
+      buildRiffChunk('id3 ', new Uint8Array(id3Tag)),
+      chunks.find((c) => c.id === 'data')
+    );
 
-    // The top-level RIFF size field covers everything after itself, so it
-    // needs correcting whenever the file's total length changes.
-    new DataView(spliced.buffer).setUint32(4, spliced.byteLength - 8, true);
-    return spliced.buffer;
+    return buffer;
   }
 
   function readSyncsafeInt(bytes) {
@@ -290,9 +325,10 @@
   }
 
   function parseExistingId3(buffer) {
-    // Only reads the frames we care about preserving (TIT2/TALB/TPE1/APIC);
-    // anything else in the tag is intentionally not round-tripped since
-    // browser-id3-writer always builds a brand-new tag from what we set.
+    // Only reads the frames we care about preserving (TIT2/TALB/TPE1/TCON/
+    // APIC); anything else in the tag is intentionally not round-tripped
+    // since browser-id3-writer always builds a brand-new tag from what we
+    // set.
     const bytes = new Uint8Array(buffer);
     const result = {};
     if (bytes.length < 10 || bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return result;
@@ -331,14 +367,15 @@
     return { data: await response.arrayBuffer(), mimeType: response.headers.get('content-type') || 'image/jpeg' };
   }
 
-  async function mergeMp3Metadata(buffer, fields) {
-    const existing = parseExistingId3(buffer);
-
+  async function buildId3Tag(existing, fields, seedBuffer) {
+    // seedBuffer is the real MP3 bytes when tagging an actual MP3 (so the
+    // audio survives the rewrite), or an empty buffer when we just want the
+    // standalone tag bytes (e.g. to embed in a WAV "id3 " chunk).
     // Pinned to the exact version whose source was reviewed before use.
     const { ID3Writer } = await import(
       'https://unpkg.com/browser-id3-writer@6.3.1/dist/browser-id3-writer.mjs'
     );
-    const writer = new ID3Writer(buffer);
+    const writer = new ID3Writer(seedBuffer);
     writer.setFrame('TIT2', existing.TIT2 || fields.title);
     const album = existing.TALB || fields.album;
     if (album) writer.setFrame('TALB', album);
@@ -362,6 +399,11 @@
 
     writer.addTag();
     return writer.arrayBuffer;
+  }
+
+  async function mergeMp3Metadata(buffer, fields) {
+    const existing = parseExistingId3(buffer);
+    return buildId3Tag(existing, fields, buffer);
   }
 
   function parseFlacBlocks(buffer) {
@@ -642,11 +684,12 @@
 
     const format = detectAudioFormat(buffer, contentType);
     if (format === 'wav') {
-      buffer = mergeWavMetadata(buffer, {
+      buffer = await mergeWavMetadata(buffer, {
         title: trackData.title,
         artist: trackData.artist,
         album: trackData.title,
         genre: trackData.genre,
+        artworkUrl: trackData.artworkUrl,
       });
     } else if (format === 'mp3') {
       buffer = await mergeMp3Metadata(buffer, {
