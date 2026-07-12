@@ -23,16 +23,16 @@
   const style = document.createElement('style');
   style.textContent = `
     .${BUTTON_CLASS} {
-      position: absolute;
+      float: left;
+      position: relative;
       top: 50%;
-      left: 100%;
-      margin-left: 8px;
       transform: translateY(-50%);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       width: 32px;
       height: 32px;
+      margin-right: 8px;
       padding: 0;
       border: none;
       border-radius: 3px;
@@ -120,15 +120,11 @@
   function insertButton() {
     if (document.querySelector(`.${BUTTON_CLASS}`)) return true;
 
-    const searchContainer = document.querySelector('.header__middle .header__search[role="search"]');
-    if (!searchContainer) return false;
-
-    if (getComputedStyle(searchContainer).position === 'static') {
-      searchContainer.style.position = 'relative';
-    }
+    const rightSection = document.querySelector('.header__right');
+    if (!rightSection) return false;
 
     const button = createButton();
-    searchContainer.appendChild(button);
+    rightSection.insertBefore(button, rightSection.firstChild);
     return true;
   }
 
