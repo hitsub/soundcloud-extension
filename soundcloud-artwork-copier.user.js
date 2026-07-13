@@ -316,11 +316,18 @@
     throw err;
   }
 
+  function getUiLang() {
+    return (navigator.language || 'en').slice(0, 2).toLowerCase();
+  }
+
   function localizeError(err) {
-    const lang = (navigator.language || 'en').slice(0, 2).toLowerCase();
     const entry = ERROR_MESSAGES[err?.code] || ERROR_MESSAGES.UNKNOWN;
-    const translate = entry[lang] || entry.en;
+    const translate = entry[getUiLang()] || entry.en;
     return translate(err?.params || {});
+  }
+
+  function localizeTooltip(en, ja) {
+    return getUiLang() === 'ja' ? ja : en;
   }
 
   function getHighResUrl(baseUrl) {
@@ -1049,7 +1056,10 @@
 
       const elRect = el.getBoundingClientRect();
       const tooltipRect = tooltipEl.getBoundingClientRect();
-      tooltipEl.style.top = `${elRect.top + window.scrollY - tooltipRect.height - 8}px`;
+      // SoundCloud's own tooltips sit below their trigger with the arrow
+      // pointing up at it (the arrow's own direction is fixed by their
+      // CSS, not something we control per instance).
+      tooltipEl.style.top = `${elRect.bottom + window.scrollY + 12}px`;
       tooltipEl.style.left = `${elRect.left + window.scrollX + elRect.width / 2 - tooltipRect.width / 2}px`;
 
       requestAnimationFrame(() => tooltipEl?.classList.add('m-is-visible'));
@@ -1136,7 +1146,7 @@
     button.type = 'button';
     button.className = `${extraClasses} ${TILE_BUTTON_CLASS}`;
     button.setAttribute('aria-label', 'Copy artwork');
-    attachSoundCloudTooltip(button, 'Copy artwork');
+    attachSoundCloudTooltip(button, localizeTooltip('Copy Artwork', 'ジャケット画像をコピー'));
 
     const iconWrapper = document.createElement('div');
     iconWrapper.innerHTML = icon;
