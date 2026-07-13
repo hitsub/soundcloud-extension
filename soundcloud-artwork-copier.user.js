@@ -180,8 +180,11 @@
     }
     /* The row's own hover state reveals a native overlay/menu over this
        same area, which both visually clashes with and steals clicks from
-       this icon — hide it while that's showing rather than fight it. */
-    .trackItem:hover .${INLINE_DOWNLOAD_ICON_CLASS} {
+       this icon — hide it while that's showing rather than fight it. The
+       same overlay also stays revealed for the currently playing row
+       (marked with the "active" class) even without hovering it. */
+    .trackItem:hover .${INLINE_DOWNLOAD_ICON_CLASS},
+    .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS} {
       display: none;
     }
     .${STATE_SUCCESS_CLASS},
@@ -1121,7 +1124,10 @@
         const artworkEl = rowEl.closest('.sound__body')?.querySelector('.sound__artwork') ?? null;
         return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
       },
-      icon: ICON_CLIPBOARD_SOLID,
+      // The outline icon (same as the hero page), not the tile overlay's
+      // Font Awesome solid glyph — that's reserved for the grid view where
+      // it sits directly on the artwork.
+      icon: ICON_IDLE,
     },
     {
       // Playlist track rows reuse the same soundActions button-group
@@ -1134,7 +1140,7 @@
         const artworkEl = rowEl.closest('.trackItem')?.querySelector('.trackItem__image') ?? null;
         return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
       },
-      icon: ICON_CLIPBOARD_SOLID,
+      icon: ICON_IDLE,
     },
     {
       // The hero page's action row isn't inside a .sound__body tile/row, so
