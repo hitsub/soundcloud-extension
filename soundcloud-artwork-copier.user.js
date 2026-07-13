@@ -111,6 +111,7 @@
   // icon-color treatment instead of the outline used everywhere else.
   const MORE_BUTTON_ICON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownloadIcon';
   const INLINE_DOWNLOAD_ICON_CLASS = 'scArtworkCopy__inlineDownloadIcon';
+  const PURCHASE_LINK_DOMAIN_CLASS = 'scArtworkCopy__purchaseLinkDomain';
   const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
   const TOAST_CLASS = 'scArtworkCopy__toast';
   const TOAST_VISIBLE_CLASS = 'scArtworkCopy__toast--visible';
@@ -186,6 +187,13 @@
     .trackItem:hover .${INLINE_DOWNLOAD_ICON_CLASS},
     .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS} {
       display: none;
+    }
+    .${PURCHASE_LINK_DOMAIN_CLASS} {
+      margin-left: 4px;
+      font-size: 11px;
+      color: var(--secondary-text-color, #999);
+      white-space: nowrap;
+      vertical-align: middle;
     }
     .${STATE_SUCCESS_CLASS},
     .${STATE_SUCCESS_CLASS} svg,
@@ -1197,6 +1205,39 @@
     return button;
   }
 
+  function extractLinkDomain(href) {
+    try {
+      const url = new URL(href, location.origin);
+      // Purchase links are often routed through a gate/redirect service
+      // (e.g. gate.sc) with the real destination stashed in a "url" query
+      // param — surface that domain instead of the gate's own.
+      const wrapped = url.searchParams.get('url');
+      if (wrapped) {
+        try {
+          return new URL(wrapped).hostname.replace(/^www\./, '');
+        } catch {
+          // wrapped value wasn't a valid absolute URL — fall through.
+        }
+      }
+      return url.hostname.replace(/^www\./, '');
+    } catch {
+      return null;
+    }
+  }
+
+  function insertPurchaseLinkDomains() {
+    document.querySelectorAll('.soundActions__purchaseLink').forEach((link) => {
+      if (link.nextElementSibling?.classList.contains(PURCHASE_LINK_DOMAIN_CLASS)) return;
+      const href = link.getAttribute('href');
+      const domain = href && extractLinkDomain(href);
+      if (!domain) return;
+      const badge = document.createElement('span');
+      badge.className = PURCHASE_LINK_DOMAIN_CLASS;
+      badge.textContent = domain;
+      link.insertAdjacentElement('afterend', badge);
+    });
+  }
+
   function insertDownloadButtons() {
     document.querySelectorAll('.moreActions__group').forEach((groupEl) => {
       const nativeDownloadButton = groupEl.querySelector('.sc-button-download');
@@ -1238,10 +1279,12 @@
       insertTileButtons();
       insertDownloadButtons();
       highlightDownloadableTriggers();
+      insertPurchaseLinkDomains();
     });
     observer.observe(document.body, { childList: true, subtree: true });
     insertTileButtons();
     insertDownloadButtons();
     highlightDownloadableTriggers();
+    insertPurchaseLinkDomains();
   });
 })();

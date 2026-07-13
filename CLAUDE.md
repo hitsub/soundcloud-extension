@@ -24,9 +24,11 @@ There is no way to execute or type-check this script outside a real browser (no 
 
 Both share `attachCopyHandler()`, which drives a loading → success/failure icon state machine (`showFeedback`, `setIcon`) and pops a toast (`showToast`) with a localized failure reason on error. Each button remembers its own idle icon via `button._idleIcon` (don't let `showFeedback` hardcode one icon for all buttons — that was a real bug once).
 
+A third, unrelated pass — `insertPurchaseLinkDomains()` — isn't a button at all, so it doesn't go through `attachCopyHandler()`: it finds every `.soundActions__purchaseLink` ("OUT NOW"-style external purchase link) and appends a plain text span showing the link's destination domain. `extractLinkDomain()` unwraps redirect/gate services (e.g. `gate.sc?url=<encoded real URL>`) by checking for a `url` query param and using its hostname instead of the gate's own, falling back to the href's own hostname otherwise.
+
 ### SoundCloud is a React SPA — everything is re-injected continuously
 
-A single `MutationObserver` on `document.body` re-runs `insertTileButtons`/`insertDownloadButtons` on every DOM mutation, because:
+A single `MutationObserver` on `document.body` re-runs `insertTileButtons`/`insertDownloadButtons`/`insertPurchaseLinkDomains` on every DOM mutation, because:
 - Track lists lazy-load more tiles/rows as the user scrolls.
 - "More" dropdown menus are portaled into the DOM fresh each time they're opened (not nested near the tile/row that opened them).
 
