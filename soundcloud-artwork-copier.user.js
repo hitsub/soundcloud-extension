@@ -191,7 +191,7 @@
     .${PURCHASE_LINK_DOMAIN_CLASS} {
       margin-left: 4px;
       font-size: 11px;
-      color: var(--secondary-text-color, #999);
+      color: var(--secondary-text-color, #999) !important;
       white-space: nowrap;
       vertical-align: middle;
     }
@@ -1227,14 +1227,17 @@
 
   function insertPurchaseLinkDomains() {
     document.querySelectorAll('.soundActions__purchaseLink').forEach((link) => {
-      if (link.nextElementSibling?.classList.contains(PURCHASE_LINK_DOMAIN_CLASS)) return;
+      if (link.querySelector(`.${PURCHASE_LINK_DOMAIN_CLASS}`)) return;
       const href = link.getAttribute('href');
       const domain = href && extractLinkDomain(href);
       if (!domain) return;
       const badge = document.createElement('span');
       badge.className = PURCHASE_LINK_DOMAIN_CLASS;
       badge.textContent = domain;
-      link.insertAdjacentElement('afterend', badge);
+      // Appended inside the link (alongside its icon span) rather than as
+      // an external sibling — .purchaseLink__container isn't a flex
+      // container, so a sibling wrapped onto its own line below the icon.
+      link.appendChild(badge);
     });
   }
 
