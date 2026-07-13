@@ -31,7 +31,8 @@ under its own license (not the MIT license above):
   soundcloud-menu-extension.user.js — © Fonticons, Inc., licensed under
   CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). See
   https://fontawesome.com/license/free for full license terms.
-- browser-id3-writer — not bundled with this repository; dynamically
-  imported at runtime from a version-pinned unpkg URL. Licensed under the
-  MIT License. See https://github.com/egoroof/browser-id3-writer for source
-  and license text.
+- browser-id3-writer — not bundled with this repository; fetched at runtime
+  from a version-pinned unpkg URL, verified against a pinned SHA-256 hash
+  before being imported (see loadId3Writer() in
+  soundcloud-menu-extension.user.js). Licensed under the MIT License. See
+  https://github.com/egoroof/browser-id3-writer for source and license text.

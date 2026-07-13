@@ -293,6 +293,14 @@
       en: ({ status }) => `Failed to download the file (${status}).`,
       ja: ({ status }) => `ファイルのダウンロードに失敗しました（${status}）。`,
     },
+    ID3_LIBRARY_FETCH_FAILED: {
+      en: ({ status }) => `Failed to load the ID3 tagging library (${status}).`,
+      ja: ({ status }) => `ID3タグ書き込み用ライブラリの取得に失敗しました（${status}）。`,
+    },
+    ID3_LIBRARY_INTEGRITY_MISMATCH: {
+      en: () => 'The ID3 tagging library did not match its expected checksum.',
+      ja: () => 'ID3タグ書き込み用ライブラリの内容が想定と一致しませんでした。',
+    },
     UNKNOWN: {
       en: () => 'Something went wrong.',
       ja: () => '不明なエラーが発生しました。',
@@ -625,13 +633,35 @@
     return { data: await response.arrayBuffer(), mimeType: response.headers.get('content-type') || 'image/jpeg' };
   }
 
+  // browser-id3-writerはESモジュール（"export"構文）でのみ配布されており、
+  // Tampermonkeyの@requireは"export"を含むファイルをクラシックスクリプトとして注入しようとしてSyntaxErrorになるため使えない
+  // （@requireにSRIハッシュを付ける方式が採れない）。
+  // その代わりとして、fetchしたソース文字列そのものをレビュー済みバイト列のSHA-256と照合し、
+  // 一致した場合のみBlob URL経由でimport()する — ネイティブのSRIと同等に、
+  // 実行前に内容がレビュー時点のバイト列と完全に一致することを保証する。
+  const ID3_WRITER_URL = 'https://unpkg.com/browser-id3-writer@6.3.1/dist/browser-id3-writer.mjs';
+  const ID3_WRITER_SHA256 = 'f19f2d740c7502eca75662005d31dffc1635037bfa1bd63287d073bf1f7b672c';
+
+  async function loadId3Writer() {
+    const response = await fetch(ID3_WRITER_URL);
+    if (!response.ok) failWith('ID3_LIBRARY_FETCH_FAILED', { status: response.status });
+    const source = await response.text();
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+    const hex = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    if (hex !== ID3_WRITER_SHA256) failWith('ID3_LIBRARY_INTEGRITY_MISMATCH');
+
+    const blobUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+    try {
+      return await import(blobUrl);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  }
+
   async function buildId3Tag(existing, fields, seedBuffer) {
     // seedBufferは、実際のMP3にタグを付ける場合は本物のMP3バイト列（書き換え後も音声データが残るように）、
     // タグ単体のバイト列だけが欲しい場合（WAVの"id3 "チャンクに埋め込む場合など）は空のバッファ。
-    // 使用前にソースをレビュー済みの、特定バージョンに固定している。
-    const { ID3Writer } = await import(
-      'https://unpkg.com/browser-id3-writer@6.3.1/dist/browser-id3-writer.mjs'
-    );
+    const { ID3Writer } = await loadId3Writer();
     const writer = new ID3Writer(seedBuffer);
     writer.setFrame('TIT2', existing.TIT2 || fields.title);
     const album = existing.TALB || fields.album;
