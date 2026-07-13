@@ -110,6 +110,7 @@
   // artwork image (like the tile copy button), so it keeps the older
   // icon-color treatment instead of the outline used everywhere else.
   const MORE_BUTTON_ICON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownloadIcon';
+  const INLINE_DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__inlineDownloadButton';
   const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
   const TOAST_CLASS = 'scArtworkCopy__toast';
   const TOAST_VISIBLE_CLASS = 'scArtworkCopy__toast--visible';
@@ -162,6 +163,28 @@
     .${DOWNLOAD_BUTTON_CLASS}:hover,
     .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS}:hover {
       opacity: 0.7 !important;
+    }
+    .${INLINE_DOWNLOAD_BUTTON_CLASS} {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      margin-left: 4px;
+      padding: 0;
+      border: none;
+      border-radius: 3px;
+      background: transparent;
+      color: #ff5500;
+      cursor: pointer;
+      vertical-align: middle;
+    }
+    .${INLINE_DOWNLOAD_BUTTON_CLASS} svg {
+      width: 16px;
+      height: 16px;
+    }
+    .${INLINE_DOWNLOAD_BUTTON_CLASS}:hover {
+      opacity: 0.7;
     }
     .${STATE_SUCCESS_CLASS},
     .${STATE_SUCCESS_CLASS} svg,
@@ -889,6 +912,30 @@
     return permalinkFromScope(trigger);
   }
 
+  function createInlineDownloadButton(rowEl) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = INLINE_DOWNLOAD_BUTTON_CLASS;
+    button.title = 'Download file with metadata';
+    button.setAttribute('aria-label', 'Download file with metadata');
+    button.innerHTML = ICON_DOWNLOAD;
+    button._idleIcon = ICON_DOWNLOAD;
+    attachCopyHandler(button, () => downloadFileWithMetadata(permalinkFromScope(rowEl)));
+    return button;
+  }
+
+  function insertInlinePlaylistDownloadButton(trigger) {
+    // Playlist rows are dense enough that waiting for a hover-revealed
+    // "More" button felt too hidden — show a standing download button
+    // right next to the play count instead, for tracks already known to
+    // be downloadable.
+    const row = trigger.closest('.trackItem');
+    if (!row || row.querySelector(`.${INLINE_DOWNLOAD_BUTTON_CLASS}`)) return;
+    const playCount = row.querySelector('.trackItem__playCount');
+    if (!playCount) return;
+    playCount.insertAdjacentElement('afterend', createInlineDownloadButton(row));
+  }
+
   function markTriggerDownloadable(trigger) {
     if (trigger.dataset.scHasDownload) return;
     trigger.dataset.scHasDownload = '1';
@@ -896,6 +943,7 @@
     // the icon-color treatment instead of the outline used elsewhere.
     const isGridTile = !!trigger.closest('.playableTile__actionWrapper');
     trigger.classList.add(isGridTile ? MORE_BUTTON_ICON_HIGHLIGHT_CLASS : MORE_BUTTON_HIGHLIGHT_CLASS);
+    insertInlinePlaylistDownloadButton(trigger);
   }
 
   function highlightDownloadableTriggers() {
@@ -921,8 +969,7 @@
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
-  async function downloadFileWithMetadata(dropdownEl) {
-    const trackUrl = resolveTrackPermalink(dropdownEl);
+  async function downloadFileWithMetadata(trackUrl) {
     const trackData = await fetchTrackData(trackUrl);
     let { buffer, contentType } = await fetchDownloadFile(trackData.id);
 
@@ -1143,7 +1190,7 @@
     label.textContent = 'Download file with metadata';
 
     button.append(iconWrapper, label);
-    attachCopyHandler(button, () => downloadFileWithMetadata(dropdownEl));
+    attachCopyHandler(button, () => downloadFileWithMetadata(resolveTrackPermalink(dropdownEl)));
     return button;
   }
 
