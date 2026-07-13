@@ -952,13 +952,21 @@
   }
 
   function markTriggerDownloadable(trigger) {
-    if (trigger.dataset.scHasDownload) return;
-    trigger.dataset.scHasDownload = '1';
     // The grid tile's More button sits on top of the artwork, so it keeps
     // the icon-color treatment instead of the outline used elsewhere.
     const isGridTile = !!trigger.closest('.playableTile__actionWrapper');
     trigger.classList.add(isGridTile ? MORE_BUTTON_ICON_HIGHLIGHT_CLASS : MORE_BUTTON_HIGHLIGHT_CLASS);
     insertInlinePlaylistDownloadIcon(trigger);
+  }
+
+  function clearTriggerDownloadableState(trigger) {
+    // SPA navigation can reuse the very same "More" trigger element for a
+    // different track (e.g. going from one hero page straight to
+    // another), so a highlight from whatever track this node was
+    // previously marked for has to be wiped before re-evaluating rather
+    // than trusted forever.
+    trigger.classList.remove(MORE_BUTTON_HIGHLIGHT_CLASS, MORE_BUTTON_ICON_HIGHLIGHT_CLASS);
+    trigger.closest('.trackItem')?.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)?.remove();
   }
 
   function highlightDownloadableTriggers() {
@@ -967,9 +975,11 @@
     // downloadable, even before its "More" button has ever been opened.
     if (downloadableByPath.size === 0) return;
     document.querySelectorAll('.sc-button-more').forEach((trigger) => {
-      if (trigger.dataset.scHasDownload) return;
       const path = permalinkPath(permalinkFromScope(trigger));
+      if (trigger.dataset.scDownloadPath === path) return; // already evaluated for this exact track
+      trigger.dataset.scDownloadPath = path || '';
       if (path && downloadableByPath.get(path)) markTriggerDownloadable(trigger);
+      else clearTriggerDownloadableState(trigger);
     });
   }
 
@@ -1302,11 +1312,15 @@
       // Download availability is only knowable once the dropdown has been
       // opened (it's portaled in fresh each time), so mark the trigger
       // button here rather than up front — same aria-owns correlation
-      // resolveTrackPermalink() uses. The trigger stays in the DOM as long
-      // as its tile/row does, so the highlight persists after the dropdown
-      // closes.
+      // resolveTrackPermalink() uses.
       const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
-      if (trigger) markTriggerDownloadable(trigger);
+      if (trigger) {
+        // Record the path too, so highlightDownloadableTriggers() knows
+        // this trigger is already correctly settled for the current track
+        // and won't immediately re-evaluate (and potentially clear) it.
+        trigger.dataset.scDownloadPath = permalinkPath(permalinkFromScope(trigger)) || '';
+        markTriggerDownloadable(trigger);
+      }
 
       if (groupEl.querySelector(`.${DOWNLOAD_BUTTON_CLASS}`)) return;
       nativeDownloadButton.insertAdjacentElement('afterend', createDownloadButton(dropdownEl));
