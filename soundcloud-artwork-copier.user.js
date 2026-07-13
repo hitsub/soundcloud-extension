@@ -23,10 +23,11 @@
   }
 
   function recordDownloadableInfo(value, depth = 0) {
-    // api-v2の各レスポンス形状（stream/likes/playlist/searchのコレクションは
-    // それぞれ違う形でトラックオブジェクトをネストしている）を個別にハード
-    // コーディングせず、汎用的に再帰スキャンする。両方のフィールドを持つ
-    // オブジェクトはすべてトラックとみなす。
+    // api-v2の各レスポンス形状（stream/likes/playlist/
+    // searchのコレクションはそれぞれ違う形でトラックオブジェクトをネストしている）
+    // を個別にハードコーディングせず、
+    // 汎用的に再帰スキャンする。
+    // 両方のフィールドを持つオブジェクトはすべてトラックとみなす。
     if (!value || typeof value !== 'object' || depth > 6) return;
     if (Array.isArray(value)) {
       value.forEach((item) => recordDownloadableInfo(item, depth + 1));
@@ -34,9 +35,9 @@
     }
     if (typeof value.permalink_url === 'string' && typeof value.downloadable === 'boolean') {
       const path = permalinkPath(value.permalink_url);
-      // downloadableはトラックのダウンロード数上限（download_count）を
-      // 使い切った後もtrueのままになりうる — 実際にネイティブの
-      // 「Download file」項目が出るかどうかはhas_downloads_leftで決まる。
+      // downloadableはトラックのダウンロード数上限（download_count）
+      // を使い切った後もtrueのままになりうる —
+      // 実際にネイティブの「Download file」項目が出るかどうかはhas_downloads_leftで決まる。
       if (path) downloadableByPath.set(path, value.downloadable && value.has_downloads_left !== false);
     }
     for (const key of Object.keys(value)) {
@@ -46,10 +47,11 @@
 
   function patchFetchForDownloadableInfo() {
     // 表示中の各トラックについて追加のリクエストを投げるのではなく、
-    // SoundCloud自身のアプリがトラック一覧描画のためにすでに取得している
-    // JSON（stream/likes/playlist/searchはすべてapi-v2経由）を横から読む。
-    // ページ自身のスクリプトがこれらの呼び出しを始める前に組み込む必要が
-    // あるため、@run-at document-startにしている。
+    // SoundCloud自身のアプリがトラック一覧描画のためにすでに取得しているJSON（stream/likes/playlist/
+    // searchはすべてapi-v2経由）
+    // を横から読む。
+    // ページ自身のスクリプトがこれらの呼び出しを始める前に組み込む必要があるため、
+    // @run-at document-startにしている。
     const nativeFetch = window.fetch;
     if (typeof nativeFetch !== 'function') return;
     window.fetch = function (...args) {
@@ -71,8 +73,9 @@
   patchFetchForDownloadableInfo();
 
   function patchXhrForDownloadableInfo() {
-    // SoundCloud自身の一覧取得リクエスト（track_likesなど）はfetchではなく
-    // XMLHttpRequest経由であることが判明したため、同様の横読み処理が必要。
+    // SoundCloud自身の一覧取得リクエスト（track_likesなど）
+    // はfetchではなくXMLHttpRequest経由であることが判明したため、
+    // 同様の横読み処理が必要。
     const nativeOpen = XMLHttpRequest.prototype.open;
     const nativeSend = XMLHttpRequest.prototype.send;
     if (typeof nativeOpen !== 'function' || typeof nativeSend !== 'function') return;
@@ -109,9 +112,8 @@
   const TILE_BUTTON_CLASS = 'scArtworkCopy__tileButton';
   const DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__downloadButton';
   const MORE_BUTTON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownload';
-  // グリッド（Badges）タイルのMoreボタンはジャケット画像の真上に乗るため
-  // （コピー用ボタンと同様に）、他の箇所で使うアウトラインではなく従来の
-  // アイコン色変更の方式を維持する。
+  // グリッド（Badges）タイルのMoreボタンはジャケット画像の真上に乗るため（コピー用ボタンと同様に）、
+  // 他の箇所で使うアウトラインではなく従来のアイコン色変更の方式を維持する。
   const MORE_BUTTON_ICON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownloadIcon';
   const INLINE_DOWNLOAD_ICON_CLASS = 'scArtworkCopy__inlineDownloadIcon';
   const PURCHASE_LINK_DOMAIN_CLASS = 'scArtworkCopy__purchaseLinkDomain';
@@ -142,9 +144,8 @@
       fill: #ff5500 !important;
     }
     .${MORE_BUTTON_HIGHLIGHT_CLASS} {
-      /* マイナスのoffsetでアウトラインをボタンの内側に描く（外側にはみ出す
-         box-shadow/outlineは、リスト行の詰まったボタングループによって
-         不均一に切り取られてしまっていた）。 */
+      /* マイナスのoffsetでアウトラインをボタンの内側に描く（外側にはみ出すbox-shadow/outlineは、
+         リスト行の詰まったボタングループによって不均一に切り取られてしまっていた）。 */
       outline: 2px solid #ff5500 !important;
       outline-offset: -2px;
     }
@@ -154,9 +155,8 @@
       color: #ff5500 !important;
       fill: #ff5500 !important;
     }
-    /* 上で強制しているcolor/fillがネイティブボタン自身の:hoverフェードを
-       妨げてしまうため、隣のボタン（Like/Follow/Moreなど）と挙動を揃える
-       ために同じフェードを明示的に再定義する。 */
+    /* 上で強制しているcolor/fillがネイティブボタン自身の:hoverフェードを妨げてしまうため、
+       隣のボタン（Like/Follow/Moreなど）と挙動を揃えるために同じフェードを明示的に再定義する。 */
     .${DOWNLOAD_BUTTON_CLASS}:hover,
     .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS}:hover {
       opacity: 0.7 !important;
@@ -175,17 +175,15 @@
       width: 16px;
       height: 16px;
     }
-    /* 行自体のホバー状態になると、このアイコンと同じ場所にSoundCloud側の
-       オーバーレイ/メニューが表示され、見た目もクリックも競合してしまう
-       ため、対抗せずに表示中はこのアイコンを隠す。同じオーバーレイは
-       再生中の行（"active"クラスが付く）でもホバーなしで表示され続ける。 */
+    /* 行自体のホバー状態になると、このアイコンと同じ場所にSoundCloud側のオーバーレイ/メニューが表示され、
+       見た目もクリックも競合してしまうため、対抗せずに表示中はこのアイコンを隠す。
+       同じオーバーレイは再生中の行（"active"クラスが付く）でもホバーなしで表示され続ける。 */
     .trackItem:hover .${INLINE_DOWNLOAD_ICON_CLASS},
     .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS} {
       display: none;
     }
-    /* デフォルトではflexコンテナではないため、そのままだと唯一の子要素
-       （リンク）と追加したドメインバッジが横並びにならず縦に積まれて
-       しまう。 */
+    /* デフォルトではflexコンテナではないため、
+       そのままだと唯一の子要素（リンク）と追加したドメインバッジが横並びにならず縦に積まれてしまう。 */
     .purchaseLink__container {
       display: inline-flex !important;
       align-items: center !important;
@@ -302,9 +300,9 @@
   };
 
   function failWith(code, params) {
-    // 英語のcode/paramsの組み合わせを.messageに残しておくことで、言語設定に
-    // 関わらずconsole.errorの出力がデバッグに使える状態を保つ。トースト用の
-    // ローカライズ文言は.codeから別途引く。
+    // 英語のcode/paramsの組み合わせを.messageに残しておくことで、
+    // 言語設定に関わらずconsole.errorの出力がデバッグに使える状態を保つ。
+    // トースト用のローカライズ文言は.codeから別途引く。
     const err = new Error(params ? `${code} ${JSON.stringify(params)}` : code);
     err.code = code;
     err.params = params || {};
@@ -326,9 +324,9 @@
   }
 
   function getHighResUrl(baseUrl) {
-    // Webアプリ自身が描画するDOMは"-t{width}x{height}"（例: -t500x500）を
-    // 使うが、/resolve APIのartwork_urlフィールドはSoundCloudの古い
-    // "-large"表記を使う — どちらにもマッチさせる。
+    // Webアプリ自身が描画するDOMは"-t{width}x{height}"（例: -t500x500）を使うが、
+    // /resolve APIのartwork_urlフィールドはSoundCloudの古い"-large"表記を使う —
+    // どちらにもマッチさせる。
     return baseUrl.replace(/-(?:t\d+x\d+|large)(?=\.\w+$)/, '-original');
   }
 
@@ -339,24 +337,27 @@
     return canvas.convertToBlob({ type: 'image/png' });
   }
 
-  async function copyArtworkFromBaseUrl(baseUrl) {
+  async function fetchArtworkResponse(baseUrl) {
     let response = await fetch(getHighResUrl(baseUrl));
     if (!response.ok) response = await fetch(baseUrl);
     if (!response.ok) failWith('FETCH_ARTWORK_FAILED', { status: response.status });
+    return response;
+  }
 
+  async function copyArtworkFromBaseUrl(baseUrl) {
+    const response = await fetchArtworkResponse(baseUrl);
     let blob = await response.blob();
-    // クリップボードへの書き込みが保証されるのはimage/pngのみ。一部の
-    // ジャケット画像（特に"-original"の高解像度版が無いもの）は
-    // image/jpegで配信されており、ブラウザによっては書き込みを拒否する。
+    // クリップボードへの書き込みが保証されるのはimage/pngのみ。
+    // 一部のジャケット画像（特に"-original"の高解像度版が無いもの）はimage/jpegで配信されており、
+    // ブラウザによっては書き込みを拒否する。
     if (blob.type !== 'image/png') blob = await convertBlobToPng(blob);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
   }
 
   async function copyArtwork() {
-    // ページ自身のHTMLをfetch()してmetaタグを読む方式ではなく、ダウンロード
-    // 機能と同じapi-v2の/resolve呼び出しを経由する。そのHTML fetchこそが
-    // 断続的にm.soundcloud.comへリダイレクトされCORSでブロックされていた
-    // もの（SoundCloudのbot対策）。
+    // ページ自身のHTMLをfetch()してmetaタグを読む方式ではなく、
+    // ダウンロード機能と同じapi-v2の/resolve呼び出しを経由する。
+    // そのHTML fetchこそが断続的にm.soundcloud.comへリダイレクトされCORSでブロックされていたもの（SoundCloudのbot対策）。
     let trackData;
     try {
       trackData = await fetchTrackData(location.href);
@@ -392,6 +393,18 @@
       offset += a.length;
     }
     return result;
+  }
+
+  function uint32LE(n) {
+    const buf = new Uint8Array(4);
+    new DataView(buf.buffer).setUint32(0, n, true);
+    return buf;
+  }
+
+  function uint32BE(n) {
+    const buf = new Uint8Array(4);
+    new DataView(buf.buffer).setUint32(0, n, false);
+    return buf;
   }
 
   function parseWavChunks(buffer) {
@@ -448,21 +461,12 @@
       ['IPRD', fields.album],
       ['IGNR', fields.genre],
     ];
-    const parts = [];
-    for (const [id, value] of entries) {
-      if (!value) continue;
-      const textBytes = encoder.encode(`${value}\0`);
-      const padded = textBytes.length % 2 === 0 ? textBytes : concatBytes([textBytes, new Uint8Array([0])]);
-      const header = new Uint8Array(8);
-      header.set(encoder.encode(id), 0);
-      new DataView(header.buffer).setUint32(4, textBytes.length, true);
-      parts.push(header, padded);
-    }
-    const infoBody = concatBytes([encoder.encode('INFO'), ...parts]);
-    const chunkHeader = new Uint8Array(8);
-    chunkHeader.set(encoder.encode('LIST'), 0);
-    new DataView(chunkHeader.buffer).setUint32(4, infoBody.length, true);
-    return concatBytes([chunkHeader, infoBody]);
+    // 各サブチャンク（fourCC + LEサイズ + データ + パディング）
+    // は下のbuildRiffChunk()と同じ形なので、そのまま再利用する。
+    const parts = entries
+      .filter(([, value]) => value)
+      .map(([id, value]) => buildRiffChunk(id, encoder.encode(`${value}\0`)));
+    return buildRiffChunk('LIST', concatBytes([encoder.encode('INFO'), ...parts]));
   }
 
   function buildRiffChunk(fourCC, data) {
@@ -484,8 +488,8 @@
       const insertAt = fallbackInsertChunk ? fallbackInsertChunk.start : original.length;
       spliced = concatBytes([original.subarray(0, insertAt), newChunkBytes, original.subarray(insertAt)]);
     }
-    // 最上位のRIFFサイズフィールドはそれ以降の全体を表すので、ファイル全体の
-    // 長さが変わるたびに補正が必要。
+    // 最上位のRIFFサイズフィールドはそれ以降の全体を表すので、
+    // ファイル全体の長さが変わるたびに補正が必要。
     new DataView(spliced.buffer).setUint32(4, spliced.byteLength - 8, true);
     return spliced.buffer;
   }
@@ -510,11 +514,10 @@
     );
 
     // WAV自体のLIST/INFOチャンクにはジャケット画像の規約が無いため、
-    // ジャケット画像（および、このチャンクしか読まないプレイヤー向けに
-    // 重複して同じテキスト項目も）は、非標準だがffmpeg/mutagenが認識する
-    // "id3 "チャンク（中身は丸ごとID3v2タグ、MP3側と同じフォーマット/
-    // フレーム）に入れる。上のspliceでチャンクのオフセットがずれるため、
-    // 先に再パースする。
+    // ジャケット画像（および、このチャンクしか読まないプレイヤー向けに重複して同じテキスト項目も）は、
+    // 非標準だがffmpeg/mutagenが認識する"id3 "チャンク（中身は丸ごとID3v2タグ、
+    // MP3側と同じフォーマット/フレーム）に入れる。
+    // 上のspliceでチャンクのオフセットがずれるため、先に再パースする。
     chunks = parseWavChunks(buffer);
     const existingId3Chunk = chunks.find((c) => c.id.toLowerCase() === 'id3 ');
     const existingId3Data = existingId3Chunk
@@ -584,8 +587,8 @@
 
   function parseExistingId3(buffer) {
     // 保持したいフレーム（TIT2/TALB/TPE1/TCON/APIC）だけを読む。
-    // browser-id3-writerは常にこちらが設定した内容から新規にタグを
-    // 組み立てるため、タグ内のそれ以外の情報は意図的に引き継がない。
+    // browser-id3-writerは常にこちらが設定した内容から新規にタグを組み立てるため、
+    // タグ内のそれ以外の情報は意図的に引き継がない。
     const bytes = new Uint8Array(buffer);
     const result = {};
     if (bytes.length < 10 || bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return result;
@@ -618,16 +621,13 @@
   }
 
   async function fetchArtworkBuffer(baseUrl) {
-    let response = await fetch(getHighResUrl(baseUrl));
-    if (!response.ok) response = await fetch(baseUrl);
-    if (!response.ok) failWith('FETCH_ARTWORK_FAILED', { status: response.status });
+    const response = await fetchArtworkResponse(baseUrl);
     return { data: await response.arrayBuffer(), mimeType: response.headers.get('content-type') || 'image/jpeg' };
   }
 
   async function buildId3Tag(existing, fields, seedBuffer) {
-    // seedBufferは、実際のMP3にタグを付ける場合は本物のMP3バイト列
-    // （書き換え後も音声データが残るように）、タグ単体のバイト列だけが
-    // 欲しい場合（WAVの"id3 "チャンクに埋め込む場合など）は空のバッファ。
+    // seedBufferは、実際のMP3にタグを付ける場合は本物のMP3バイト列（書き換え後も音声データが残るように）、
+    // タグ単体のバイト列だけが欲しい場合（WAVの"id3 "チャンクに埋め込む場合など）は空のバッファ。
     // 使用前にソースをレビュー済みの、特定バージョンに固定している。
     const { ID3Writer } = await import(
       'https://unpkg.com/browser-id3-writer@6.3.1/dist/browser-id3-writer.mjs'
@@ -680,9 +680,9 @@
   }
 
   function readVorbisComments(buffer, block) {
-    // メタデータブロックのヘッダーとPICTUREブロックはビッグエンディアン
-    // だが、Vorbisコメントのフィールドはリトルエンディアン — 元のOgg
-    // Vorbisコメント仕様をそのまま引き継いだ挙動。
+    // メタデータブロックのヘッダーとPICTUREブロックはビッグエンディアンだが、
+    // Vorbisコメントのフィールドはリトルエンディアン —
+    // 元のOgg Vorbisコメント仕様をそのまま引き継いだ挙動。
     const view = new DataView(buffer);
     let offset = block.dataStart;
     const vendorLength = view.getUint32(offset, true);
@@ -720,8 +720,8 @@
   }
 
   function buildFlacMetadataBlock(type, data) {
-    // 最終的なブロックの並び順が確定した時点でlast-blockフラグを調整する
-    // ので、ここでは常にクリアした状態で組み立てる。
+    // 最終的なブロックの並び順が確定した時点でlast-blockフラグを調整するので、
+    // ここでは常にクリアした状態で組み立てる。
     const header = new Uint8Array(4);
     header[0] = type & 0x7f;
     header[1] = (data.length >> 16) & 0xff;
@@ -739,14 +739,8 @@
     if (fields.album) comments.push(encoder.encode(`ALBUM=${fields.album}`));
     if (fields.genre) comments.push(encoder.encode(`GENRE=${fields.genre}`));
 
-    const le32 = (n) => {
-      const buf = new Uint8Array(4);
-      new DataView(buf.buffer).setUint32(0, n, true);
-      return buf;
-    };
-
-    const parts = [le32(vendor.length), vendor, le32(comments.length)];
-    for (const c of comments) parts.push(le32(c.length), c);
+    const parts = [uint32LE(vendor.length), vendor, uint32LE(comments.length)];
+    for (const c of comments) parts.push(uint32LE(c.length), c);
 
     return buildFlacMetadataBlock(4, concatBytes(parts));
   }
@@ -754,19 +748,14 @@
   function buildPictureBlock(mimeType, pictureData, pictureType = 3) {
     const encoder = new TextEncoder();
     const mimeBytes = encoder.encode(mimeType);
-    const be32 = (n) => {
-      const buf = new Uint8Array(4);
-      new DataView(buf.buffer).setUint32(0, n, false);
-      return buf;
-    };
 
     const parts = [
-      be32(pictureType),
-      be32(mimeBytes.length),
+      uint32BE(pictureType),
+      uint32BE(mimeBytes.length),
       mimeBytes,
-      be32(0), // description（説明文）なし
+      uint32BE(0), // description（説明文）なし
       new Uint8Array(16), // width, height, color depth, indexed-color count（幅・高さ・色深度・インデックスカラー数）: 不明
-      be32(pictureData.byteLength),
+      uint32BE(pictureData.byteLength),
       new Uint8Array(pictureData),
     ];
     return buildFlacMetadataBlock(6, concatBytes(parts));
@@ -794,10 +783,9 @@
       pictureBlockBytes = buildPictureBlock(artwork.mimeType, artwork.data);
     }
 
-    // STREAMINFO（type 0）は必ず先頭に置く。それ以外（PADDING、
-    // APPLICATION、SEEKTABLE、CUESHEETなど）はそのまま残し、コメント/
-    // ピクチャーブロックだけを、以前あったものを置き換える形でSTREAMINFO
-    // の直後に挿入する。
+    // STREAMINFO（type 0）は必ず先頭に置く。
+    // それ以外（PADDING、APPLICATION、SEEKTABLE、CUESHEETなど）はそのまま残し、
+    // コメント/ピクチャーブロックだけを、以前あったものを置き換える形でSTREAMINFOの直後に挿入する。
     const original = new Uint8Array(buffer);
     const keptBlocks = blocks.filter((b) => b.type !== 4 && b.type !== 6).map((b) => original.slice(b.start, b.start + 4 + b.length));
 
@@ -822,8 +810,8 @@
 
   function getOAuthToken() {
     // ダウンロード用エンドポイントなどのapi-v2エンドポイントは、
-    // client_id + cookieに加えてこれも必要とする。httpOnlyではないので
-    // ここから読み取れる。
+    // client_id + cookieに加えてこれも必要とする。
+    // httpOnlyではないのでここから読み取れる。
     const match = document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);
     return match ? decodeURIComponent(match[1]) : null;
   }
@@ -834,13 +822,12 @@
   }
 
   async function fetchTrackData(url) {
-    // トラックのHTMLページを単純にfetch()するとm.soundcloud.comへ
-    // リダイレクトされCORSでブロックされる — SoundCloudのbot対策
-    // （DataDome）が、今まさに見ているページであってもスクリプトからの
-    // ページHTML取得をフラグ立てしているようだ。api-v2のresolve
-    // エンドポイントは、ダウンロード用エンドポイントですでにうまく
-    // いっているのと同種のAJAX呼び出しで、トラックのJSONを直接返して
-    // くれる（HTML/hydrationのパースが不要）。
+    // トラックのHTMLページを単純にfetch()するとm.soundcloud.comへリダイレクトされCORSでブロックされる —
+    // SoundCloudのbot対策（DataDome）が、
+    // 今まさに見ているページであってもスクリプトからのページHTML取得をフラグ立てしているようだ。
+    // api-v2のresolveエンドポイントは、
+    // ダウンロード用エンドポイントですでにうまくいっているのと同種のAJAX呼び出しで、
+    // トラックのJSONを直接返してくれる（HTML/hydrationのパースが不要）。
     const { clientId } = getSessionCredentials();
     const resolveUrl = `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url)}&client_id=${encodeURIComponent(clientId)}`;
     const response = await fetch(resolveUrl, { credentials: 'include', headers: authHeaders() });
@@ -858,9 +845,8 @@
   }
 
   function getSessionCredentials() {
-    // トラックIDと違い、client_id/app_versionはトラックごとではなく
-    // セッション単位の値なので、今表示しているページ自身のグローバル
-    // 変数は常に最新。
+    // トラックIDと違い、client_id/app_versionはトラックごとではなくセッション単位の値なので、
+    // 今表示しているページ自身のグローバル変数は常に最新。
     const clientId = getHydrationEntry(window.__sc_hydration, 'apiClient')?.id;
     const appVersion = window.__sc_version;
     if (!clientId || !appVersion) failWith('MISSING_SESSION_CREDENTIALS');
@@ -912,11 +898,10 @@
   }
 
   function permalinkFromScope(triggerEl) {
-    // トラック自身の単体ページでは、トリガーを包むタイル/行が存在しない
-    // ため、現在のページURLにフォールバックするのがそこでは正解になる。
-    // プレイリストのトラック行（.trackItem）は他の2パターンと一致する
-    // ジャケット/タイトルリンクを持たないため、専用のリンクセレクタ
-    // （.trackItem__trackTitle）が必要。
+    // トラック自身の単体ページでは、トリガーを包むタイル/行が存在しないため、
+    // 現在のページURLにフォールバックするのがそこでは正解になる。
+    // プレイリストのトラック行（.trackItem）は他の2パターンと一致するジャケット/タイトルリンクを持たないため、
+    // 専用のリンクセレクタ（.trackItem__trackTitle）が必要。
     const scope = triggerEl?.closest('.playableTile, .sound__body, .trackItem') ?? null;
     const link = scope?.querySelector('.playableTile__artworkLink, .sound__coverArt, .trackItem__trackTitle');
     const href = link?.getAttribute('href');
@@ -924,17 +909,17 @@
   }
 
   function resolveTrackPermalink(dropdownEl) {
-    // ドロップダウンは、それを開いたタイル/行とは別の場所にポータル
-    // されるため、DOM上の近さでは見つけられない。トリガーボタンは
-    // aria-ownsで自分のドロップダウンと紐づいているので、そこから
-    // トリガーを持つタイル/行まで遡り、トラックへのリンクを直接読む。
+    // ドロップダウンは、それを開いたタイル/行とは別の場所にポータルされるため、
+    // DOM上の近さでは見つけられない。
+    // トリガーボタンはaria-ownsで自分のドロップダウンと紐づいているので、
+    // そこからトリガーを持つタイル/行まで遡り、トラックへのリンクを直接読む。
     const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
     return permalinkFromScope(trigger);
   }
 
   function createInlineDownloadIcon() {
-    // ボタンにはしない: 行自体のホバー状態になると、この同じ場所を覆う
-    // ネイティブのオーバーレイ/メニューが出てクリックを奪ってしまうため、
+    // ボタンにはしない: 行自体のホバー状態になると、
+    // この同じ場所を覆うネイティブのオーバーレイ/メニューが出てクリックを奪ってしまうため、
     // これは操作可能な要素ではなく純粋な視覚的インジケーターとする。
     const icon = document.createElement('span');
     icon.className = INLINE_DOWNLOAD_ICON_CLASS;
@@ -945,10 +930,9 @@
   }
 
   function insertInlinePlaylistDownloadIcon(trigger) {
-    // プレイリストの行は密集していて、ホバーで出てくる「More」ボタンだけ
-    // では見つけにくいと判断したため、既にダウンロード可能と分かっている
-    // トラックについては、代わりに再生回数の左に常時表示のインジケーター
-    // を出す。
+    // プレイリストの行は密集していて、ホバーで出てくる「More」ボタンだけでは見つけにくいと判断したため、
+    // 既にダウンロード可能と分かっているトラックについては、
+    // 代わりに再生回数の左に常時表示のインジケーターを出す。
     const row = trigger.closest('.trackItem');
     if (!row || row.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)) return;
     const playCount = row.querySelector('.trackItem__playCount');
@@ -965,19 +949,18 @@
   }
 
   function clearTriggerDownloadableState(trigger) {
-    // SPAナビゲーションでは、まったく同じ「More」トリガー要素が別の
-    // トラックのために使い回されることがある（例えば、あるトラック単体
-    // ページから別のトラック単体ページへ直接遷移する場合）。そのため、
-    // この要素が以前どのトラックのためにマークされていたとしても、
+    // SPAナビゲーションでは、まったく同じ「More」トリガー要素が別のトラックのために使い回されることがある（例えば、
+    // あるトラック単体ページから別のトラック単体ページへ直接遷移する場合）。
+    // そのため、この要素が以前どのトラックのためにマークされていたとしても、
     // 永久に信用せず、再評価の前にハイライトを消しておく必要がある。
     trigger.classList.remove(MORE_BUTTON_HIGHLIGHT_CLASS, MORE_BUTTON_ICON_HIGHLIGHT_CLASS);
     trigger.closest('.trackItem')?.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)?.remove();
   }
 
   function highlightDownloadableTriggers() {
-    // insertDownloadButtons()の「開いてからハイライトする」フォールバック
-    // を補完するもの: 「More」ボタンが一度も開かれていなくても、横読みで
-    // 集めたデータがダウンロード可能だと示した時点で発火する。
+    // insertDownloadButtons()の「開いてからハイライトする」フォールバックを補完するもの:
+    // 「More」ボタンが一度も開かれていなくても、
+    // 横読みで集めたデータがダウンロード可能だと示した時点で発火する。
     if (downloadableByPath.size === 0) return;
     document.querySelectorAll('.sc-button-more').forEach((trigger) => {
       const path = permalinkPath(permalinkFromScope(trigger));
@@ -999,29 +982,20 @@
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
+  const METADATA_MERGERS_BY_FORMAT = {
+    wav: mergeWavMetadata,
+    mp3: mergeMp3Metadata,
+    flac: mergeFlacMetadata,
+  };
+
   async function downloadFileWithMetadata(trackUrl) {
     const trackData = await fetchTrackData(trackUrl);
     let { buffer, contentType } = await fetchDownloadFile(trackData.id);
 
     const format = detectAudioFormat(buffer, contentType);
-    if (format === 'wav') {
-      buffer = await mergeWavMetadata(buffer, {
-        title: trackData.title,
-        artist: trackData.artist,
-        album: trackData.title,
-        genre: trackData.genre,
-        artworkUrl: trackData.artworkUrl,
-      });
-    } else if (format === 'mp3') {
-      buffer = await mergeMp3Metadata(buffer, {
-        title: trackData.title,
-        artist: trackData.artist,
-        album: trackData.title,
-        genre: trackData.genre,
-        artworkUrl: trackData.artworkUrl,
-      });
-    } else if (format === 'flac') {
-      buffer = await mergeFlacMetadata(buffer, {
+    const mergeMetadata = METADATA_MERGERS_BY_FORMAT[format];
+    if (mergeMetadata) {
+      buffer = await mergeMetadata(buffer, {
         title: trackData.title,
         artist: trackData.artist,
         album: trackData.title,
@@ -1029,8 +1003,8 @@
         artworkUrl: trackData.artworkUrl,
       });
     }
-    // それ以外の形式（m4aなど）は無加工でダウンロードされる — 同等の
-    // メタデータ対応はまだ実装していない。
+    // それ以外の形式（m4aなど）は無加工でダウンロードされる —
+    // 同等のメタデータ対応はまだ実装していない。
 
     const blob = new Blob([buffer]);
     triggerFileDownload(blob, `${sanitizeFilename(trackData.title)}.${guessExtension(format, contentType)}`);
@@ -1042,8 +1016,8 @@
 
   function attachSoundCloudTooltip(el, text) {
     // SoundCloud自身のツールチップのクラス/マークアップ（矢印＋吹き出し）
-    // を再利用することで、サイト既存のCSSをそのまま活かす。ネイティブの
-    // `title`属性が出すような素のOSツールチップは使わない。
+    // を再利用することで、サイト既存のCSSをそのまま活かす。
+    // ネイティブの`title`属性が出すような素のOSツールチップは使わない。
     let tooltipEl = null;
 
     const show = () => {
@@ -1064,8 +1038,8 @@
 
       const elRect = el.getBoundingClientRect();
       const tooltipRect = tooltipEl.getBoundingClientRect();
-      // SoundCloud自身のツールチップは、トリガーの下側に矢印を上向きに
-      // して表示される（矢印自体の向きは向こうのCSSで固定されており、
+      // SoundCloud自身のツールチップは、
+      // トリガーの下側に矢印を上向きにして表示される（矢印自体の向きは向こうのCSSで固定されており、
       // インスタンスごとに制御できるものではない）。
       tooltipEl.style.top = `${elRect.bottom + window.scrollY + 12}px`;
       tooltipEl.style.left = `${elRect.left + window.scrollX + elRect.width / 2 - tooltipRect.width / 2}px`;
@@ -1112,8 +1086,8 @@
     button._feedbackTimer = setTimeout(() => {
       button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
       // 各ボタンは自分自身のアイドル時アイコンを覚えている —
-      // ダウンロードボタンのアイドル時アイコンは、コピー系ボタンが使う
-      // クリップボードアイコンとは異なる。
+      // ダウンロードボタンのアイドル時アイコンは、
+      // コピー系ボタンが使うクリップボードアイコンとは異なる。
       setIcon(button, button._idleIcon || ICON_IDLE);
     }, FEEDBACK_DURATION_MS);
   }
@@ -1147,10 +1121,9 @@
   }
 
   function createTileButton(copyFn, extraClasses, icon) {
-    // 隣に並ぶネイティブのアクションボタン（グリッドタイルなら
-    // Like/Follow/More、リスト行や単体ページならLike/Repost/Share/...）
-    // と同じ構造/クラスにすることで、見た目を揃え、既存のサイズ調整や
-    // ホバー時に表示する挙動をそのまま引き継ぐ。
+    // 隣に並ぶネイティブのアクションボタン（グリッドタイルならLike/Follow/More、
+    // リスト行や単体ページならLike/Repost/Share/...）と同じ構造/クラスにすることで、
+    // 見た目を揃え、既存のサイズ調整やホバー時に表示する挙動をそのまま引き継ぐ。
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `${extraClasses} ${TILE_BUTTON_CLASS}`;
@@ -1171,16 +1144,16 @@
     return button;
   }
 
-  // サイトには4種類の異なるトラックのレイアウトが存在する: コンパクトな
-  // グリッドタイル（.playableTile__artwork + .playableTile__actionWrapper、
-  // 例: /you/likesの「Badges」表示）、フルサイズのリスト行
-  // （.sound__artwork + .soundActions .sc-button-group、例: 「List」表示
-  // やstream）、プレイリストのトラック行（.trackItem__image +
-  // .soundActions .sc-button-group、例: /sets/...ページ）、そしてトラック
-  // 自身の単体ページ（.listenEngagement__footer .soundActions
-  // .sc-button-group — リスト行と同じボタングループのマークアップだが
-  // .sound__bodyタイル/行には包まれていない）。それぞれについて、コピー
-  // 関数の解決方法とマッチさせるネイティブボタンのクラスが個別に必要。
+  // サイトには4種類の異なるトラックのレイアウトが存在する:
+  // コンパクトなグリッドタイル（.playableTile__artwork + .playableTile__actionWrapper、
+  // 例: /you/likesの「Badges」表示）、
+  // フルサイズのリスト行（.sound__artwork + .soundActions .sc-button-group、
+  // 例: 「List」表示やstream）、
+  // プレイリストのトラック行（.trackItem__image + .soundActions .sc-button-group、
+  // 例: /sets/...ページ）、
+  // そしてトラック自身の単体ページ（.listenEngagement__footer .soundActions .sc-button-group —
+  // リスト行と同じボタングループのマークアップだが.sound__bodyタイル/行には包まれていない）。それぞれについて、
+  // コピー関数の解決方法とマッチさせるネイティブボタンのクラスが個別に必要。
   const ACTION_ROW_CONFIGS = [
     {
       rowSelector: '.playableTile__actionWrapper',
@@ -1198,16 +1171,15 @@
         const artworkEl = rowEl.closest('.sound__body')?.querySelector('.sound__artwork') ?? null;
         return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
       },
-      // アウトラインアイコン（単体ページと同じ）を使う。タイルオーバーレイ
-      // のFont Awesomeの塗りつぶしアイコンは、ジャケット画像の真上に乗る
-      // グリッド表示専用にしている。
+      // アウトラインアイコン（単体ページと同じ）を使う。
+      // タイルオーバーレイのFont Awesomeの塗りつぶしアイコンは、
+      // ジャケット画像の真上に乗るグリッド表示専用にしている。
       icon: ICON_IDLE,
     },
     {
-      // プレイリストのトラック行は「List」表示と同じsoundActions
-      // ボタングループのマークアップを再利用しているが、.sound__body
-      // ではなく.trackItem（ジャケット画像は.trackItem__image）で包まれて
-      // おり、サイズクラスも1段階小さい（-mediumではなくsc-button-small）。
+      // プレイリストのトラック行は「List」表示と同じsoundActionsボタングループのマークアップを再利用しているが、
+      // .sound__bodyではなく.trackItem（ジャケット画像は.trackItem__image）で包まれており、
+      // サイズクラスも1段階小さい（-mediumではなくsc-button-small）。
       rowSelector: '.trackItem .soundActions .sc-button-group',
       buttonClasses: 'sc-button-secondary sc-button sc-button-small sc-button-icon sc-button-responsive',
       resolveCopy: (rowEl) => {
@@ -1219,8 +1191,8 @@
     {
       // 単体ページのアクション行は.sound__bodyタイル/行の中には無いため、
       // 手がかりにできるDOM上のジャケット画像要素が存在しない —
-      // location.href自体がこのトラック自身のページなので、以前のヘッダー
-      // ボタンと同じapi-v2ベースの取得方法であるcopyArtwork()を再利用する。
+      // location.href自体がこのトラック自身のページなので、
+      // 以前のヘッダーボタンと同じapi-v2ベースの取得方法であるcopyArtwork()を再利用する。
       rowSelector: '.listenEngagement__footer .soundActions .sc-button-group',
       buttonClasses: 'sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive',
       resolveCopy: () => copyArtwork,
@@ -1248,9 +1220,9 @@
   }
 
   function createDownloadButton(dropdownEl) {
-    // 見た目を揃えるため、ネイティブの「Download file」ボタンと同じ
-    // クラスを使う。ただし"sc-button-download"自体は、サイト側でJSの
-    // 挙動フックにもなっていると思われるため、意図的に外している。
+    // 見た目を揃えるため、ネイティブの「Download file」ボタンと同じクラスを使う。
+    // ただし"sc-button-download"自体は、サイト側でJSの挙動フックにもなっていると思われるため、
+    // 意図的に外している。
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `sc-button-secondary sc-button moreActions__button sc-button-medium sc-button-tertiary ${DOWNLOAD_BUTTON_CLASS}`;
@@ -1274,9 +1246,9 @@
   function extractLinkDomain(href) {
     try {
       const url = new URL(href, location.origin);
-      // 購入リンクはゲート/リダイレクトサービス（例: gate.sc）経由に
-      // なっていることが多く、本来の遷移先は"url"クエリパラメータに
-      // 格納されている — ゲート自身のドメインではなくそちらを表示する。
+      // 購入リンクはゲート/リダイレクトサービス（例: gate.sc）経由になっていることが多く、
+      // 本来の遷移先は"url"クエリパラメータに格納されている —
+      // ゲート自身のドメインではなくそちらを表示する。
       const wrapped = url.searchParams.get('url');
       if (wrapped) {
         try {
@@ -1300,10 +1272,9 @@
       const badge = document.createElement('span');
       badge.className = PURCHASE_LINK_DOMAIN_CLASS;
       badge.textContent = domain;
-      // リンク自身はアイコンサイズの小さなボックスなので（内側に追加
-      // すると見えない形でクリップされてしまった）、代わりにその外側の
-      // 兄弟要素として置く — それだけでは横並びにするのに不十分な理由は
-      // 下の.purchaseLink__containerのCSS上書きを参照。
+      // リンク自身はアイコンサイズの小さなボックスなので（内側に追加すると見えない形でクリップされてしまった）、
+      // 代わりにその外側の兄弟要素として置く —
+      // それだけでは横並びにするのに不十分な理由は下の.purchaseLink__containerのCSS上書きを参照。
       link.insertAdjacentElement('afterend', badge);
     });
   }
@@ -1315,15 +1286,14 @@
       const dropdownEl = groupEl.closest('.dropdownMenu');
       if (!dropdownEl) return;
 
-      // ダウンロード可否は、ドロップダウンが実際に開かれた時点で初めて
-      // 分かる（開くたびに新しくポータルされるため）ので、事前にではなく
-      // ここでトリガーボタンをマークする — resolveTrackPermalink()と
-      // 同じaria-owns相関を使う。
+      // ダウンロード可否は、ドロップダウンが実際に開かれた時点で初めて分かる（開くたびに新しくポータルされるため）ので、
+      // 事前にではなくここでトリガーボタンをマークする —
+      // resolveTrackPermalink()と同じaria-owns相関を使う。
       const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
       if (trigger) {
-        // pathも記録しておくことで、highlightDownloadableTriggers()が
-        // このトリガーは現在のトラックについてすでに正しく確定済みだと
-        // 認識し、すぐに再評価して（誤って）クリアしてしまうのを防ぐ。
+        // pathも記録しておくことで、
+        // highlightDownloadableTriggers()がこのトリガーは現在のトラックについてすでに正しく確定済みだと認識し、
+        // すぐに再評価して（誤って）クリアしてしまうのを防ぐ。
         trigger.dataset.scDownloadPath = permalinkPath(permalinkFromScope(trigger)) || '';
         markTriggerDownloadable(trigger);
       }
@@ -1336,18 +1306,16 @@
   whenDomReady(() => {
     document.head.appendChild(style);
 
-    // 初回ページ読み込み時のトラック一覧（/likesの最初の一括分など）は、
-    // このhydrationデータに直接埋め込まれていて、こちらのfetchパッチで
-    // 監視できる後続のAJAX呼び出しでは取得されないことが多いので、こちら
-    // も一度だけスキャンしておく。SPAナビゲーションでは更新されないが、
+    // 初回ページ読み込み時のトラック一覧（/likesの最初の一括分など）は、このhydrationデータに直接埋め込まれていて、
+    // こちらのfetchパッチで監視できる後続のAJAX呼び出しでは取得されないことが多いので、
+    // こちらも一度だけスキャンしておく。SPAナビゲーションでは更新されないが、
     // その頃にはfetchパッチが読み込み中の新しいデータを既に捕捉している。
     recordDownloadableInfo(window.__sc_hydration);
 
-    // Reactの再描画によって挿入したボタンが消えてしまうため、監視を続けて
-    // 消えるたびに再挿入する。likes/プレイリストの一覧も遅延読み込みで
-    // スクロールに応じて新しいタイルが追加されるため、同じobserverで
-    // オーバーレイボタンの整合性を保つ。「More」ドロップダウンも開かれる
-    // たびに新しくポータルされるため、これも同様にここで捕捉する。
+    // Reactの再描画によって挿入したボタンが消えてしまうため、監視を続けて消えるたびに再挿入する。
+    // likes/プレイリストの一覧も遅延読み込みでスクロールに応じて新しいタイルが追加されるため、
+    // 同じobserverでオーバーレイボタンの整合性を保つ。
+    // 「More」ドロップダウンも開かれるたびに新しくポータルされるため、これも同様にここで捕捉する。
     const observer = new MutationObserver(() => {
       insertTileButtons();
       insertDownloadButtons();
