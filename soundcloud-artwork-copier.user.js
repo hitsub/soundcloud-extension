@@ -319,7 +319,7 @@
     return translate(err?.params || {});
   }
 
-  function localizeTooltip(en, ja) {
+  function localizeText(en, ja) {
     return getUiLang() === 'ja' ? ja : en;
   }
 
@@ -994,20 +994,37 @@
 
     const format = detectAudioFormat(buffer, contentType);
     const mergeMetadata = METADATA_MERGERS_BY_FORMAT[format];
+    let taggingFailed = false;
     if (mergeMetadata) {
-      buffer = await mergeMetadata(buffer, {
-        title: trackData.title,
-        artist: trackData.artist,
-        album: trackData.title,
-        genre: trackData.genre,
-        artworkUrl: trackData.artworkUrl,
-      });
+      // ファイル本体の取得はすでに成功している（ダウンロード数の消費も
+      // 済んでいる可能性がある）ので、この後のタグ埋め込みが失敗しても
+      // ダウンロードそのものを失敗扱いにはせず、タグ無しの元ファイルで
+      // 続行する。
+      try {
+        buffer = await mergeMetadata(buffer, {
+          title: trackData.title,
+          artist: trackData.artist,
+          album: trackData.title,
+          genre: trackData.genre,
+          artworkUrl: trackData.artworkUrl,
+        });
+      } catch (err) {
+        console.error('[SC Artwork Copier]', err);
+        taggingFailed = true;
+      }
     }
     // それ以外の形式（m4aなど）は無加工でダウンロードされる —
     // 同等のメタデータ対応はまだ実装していない。
 
     const blob = new Blob([buffer]);
     triggerFileDownload(blob, `${sanitizeFilename(trackData.title)}.${guessExtension(format, contentType)}`);
+
+    if (taggingFailed) {
+      showToast(localizeText(
+        'Metadata tagging failed, so the file was downloaded without tags.',
+        'メタデータの埋め込みに失敗したため、タグ無しでダウンロードしました。'
+      ));
+    }
   }
 
   function setIcon(button, svg) {
@@ -1128,7 +1145,7 @@
     button.type = 'button';
     button.className = `${extraClasses} ${TILE_BUTTON_CLASS}`;
     button.setAttribute('aria-label', 'Copy artwork');
-    attachSoundCloudTooltip(button, localizeTooltip('Copy Artwork', 'ジャケット画像をコピー'));
+    attachSoundCloudTooltip(button, localizeText('Copy Artwork', 'ジャケット画像をコピー'));
 
     const iconWrapper = document.createElement('div');
     iconWrapper.innerHTML = icon;

@@ -53,7 +53,7 @@ soundcloud.comにジャケット画像コピーボタンとメタデータタグ
 - **MP3**: `parseExistingId3`（手書きのID3v2リーダー — `TIT2`/`TALB`/`TPE1`/`TCON`/`APIC`のみを理解し、それ以外は扱わない）+ `buildId3Tag`。実際のタグ書き込みは`browser-id3-writer`（**バージョン固定**のunpkg URLから動的に`import()`する — 固定前にソースを手動でレビュー済み。バージョンを上げる際は再レビューすること）に委譲する。`browser-id3-writer`は常にタグをゼロから再構築するため、*それ以外*の既存ID3フレーム（コメントなど）は静かに失われる — これは受け入れ済みの意図的なトレードオフであり、修正すべきバグではない。
 - **FLAC**: `parseFlacBlocks`/`buildVorbisCommentBlock`/`buildPictureBlock`/`mergeFlacMetadata` — 外部ライブラリ無しの完全な手書き実装。Vorbisコメントのフィールドはリトルエンディアンだが、メタデータブロックのヘッダーと`PICTURE`ブロックのフィールドはビッグエンディアン（Ogg Vorbisから引き継いだ癖で、逆にしがちなので注意）。`STREAMINFO`は必ず先頭のブロックのままにしておく必要があり、「最後のメタデータブロック」フラグはブロックの挿入/削除のたびにブロック連鎖全体にわたって再計算する必要がある。
 
-`downloadFileWithMetadata()`は`detectAudioFormat()`（マジックバイト＋content-typeの判定）の結果で処理を振り分ける。それ以外の形式（m4aなど）は無加工でダウンロードされる。
+`downloadFileWithMetadata()`は`detectAudioFormat()`（マジックバイト＋content-typeの判定）の結果で処理を振り分ける。それ以外の形式（m4aなど）は無加工でダウンロードされる。ファイル本体（`fetchDownloadFile`）の取得はこの時点ですでに成功している（SoundCloud側のダウンロード数もすでに消費されている可能性がある）ため、その後のタグ埋め込み（`mergeMetadata`）が失敗してもダウンロード全体を失敗扱いにはしない — `try/catch`で囲み、失敗時はタグ無しの元`buffer`のまま`triggerFileDownload()`に進め、その旨をトーストで通知する（`taggingFailed`フラグ）。
 
 ### 「Moreボタンにダウンロードがあるか」の受動的な判定（`document-start` + fetch/XHRパッチ）
 
