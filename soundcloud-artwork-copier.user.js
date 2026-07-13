@@ -871,9 +871,11 @@
   function permalinkFromScope(triggerEl) {
     // On the track's own hero page there's no tile/row wrapping the
     // trigger, so falling back to the current page's URL is exactly the
-    // right answer there.
-    const scope = triggerEl?.closest('.playableTile, .sound__body') ?? null;
-    const link = scope?.querySelector('.playableTile__artworkLink, .sound__coverArt');
+    // right answer there. Playlist track rows (.trackItem) have no
+    // artwork/title link matching the other two shapes, so they need their
+    // own link selector (.trackItem__trackTitle).
+    const scope = triggerEl?.closest('.playableTile, .sound__body, .trackItem') ?? null;
+    const link = scope?.querySelector('.playableTile__artworkLink, .sound__coverArt, .trackItem__trackTitle');
     const href = link?.getAttribute('href');
     return href ? new URL(href, location.origin).href : location.href;
   }
@@ -1048,14 +1050,16 @@
     return button;
   }
 
-  // Three distinct track layouts exist on the site: compact grid tiles
+  // Four distinct track layouts exist on the site: compact grid tiles
   // (.playableTile__artwork + .playableTile__actionWrapper, e.g. on
   // /you/likes' "Badges" view), full list rows (.sound__artwork +
-  // .soundActions .sc-button-group, e.g. the "List" view / stream), and the
-  // track's own hero page (.listenEngagement__footer .soundActions
-  // .sc-button-group — same button-group markup as list rows, but not
-  // wrapped in a .sound__body tile/row). Each needs its own way to resolve
-  // a copy function and its own native button classes to match.
+  // .soundActions .sc-button-group, e.g. the "List" view / stream),
+  // playlist track rows (.trackItem__image + .soundActions
+  // .sc-button-group, e.g. /sets/... pages), and the track's own hero page
+  // (.listenEngagement__footer .soundActions .sc-button-group — same
+  // button-group markup as list rows, but not wrapped in a .sound__body
+  // tile/row). Each needs its own way to resolve a copy function and its
+  // own native button classes to match.
   const ACTION_ROW_CONFIGS = [
     {
       rowSelector: '.playableTile__actionWrapper',
@@ -1071,6 +1075,19 @@
       buttonClasses: 'sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive',
       resolveCopy: (rowEl) => {
         const artworkEl = rowEl.closest('.sound__body')?.querySelector('.sound__artwork') ?? null;
+        return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
+      },
+      icon: ICON_CLIPBOARD_SOLID,
+    },
+    {
+      // Playlist track rows reuse the same soundActions button-group
+      // markup as the "List" view, but wrap it in .trackItem (with the
+      // artwork in .trackItem__image) rather than .sound__body, and use
+      // one size class down (sc-button-small, not -medium).
+      rowSelector: '.trackItem .soundActions .sc-button-group',
+      buttonClasses: 'sc-button-secondary sc-button sc-button-small sc-button-icon sc-button-responsive',
+      resolveCopy: (rowEl) => {
+        const artworkEl = rowEl.closest('.trackItem')?.querySelector('.trackItem__image') ?? null;
         return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
       },
       icon: ICON_CLIPBOARD_SOLID,
