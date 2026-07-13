@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SoundCloud Menu Extension
 // @namespace    https://github.com/hitsub/soundcloud-extension/
-// @version      0.3.0
+// @version      0.3.1
 // @description  トラックのタイル/行/単体ページ、またはMoreメニューからジャケット画像をコピーし、タイトル・アーティスト・アルバム・ジャケット画像タグが未設定のファイルをダウンロード時に自動で埋め込む（WAV/MP3/FLAC）
 // @author       hitsub
 // @match        *://soundcloud.com/*
@@ -116,6 +116,7 @@
   // 他の箇所で使うアウトラインではなく従来のアイコン色変更の方式を維持する。
   const MORE_BUTTON_ICON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownloadIcon';
   const INLINE_DOWNLOAD_ICON_CLASS = 'scArtworkCopy__inlineDownloadIcon';
+  const PURCHASE_LINK_WRAPPER_CLASS = 'scArtworkCopy__purchaseLinkWrapper';
   const PURCHASE_LINK_DOMAIN_CLASS = 'scArtworkCopy__purchaseLinkDomain';
   const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
   const TOAST_CLASS = 'scArtworkCopy__toast';
@@ -182,18 +183,24 @@
     .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS} {
       display: none;
     }
-    /* デフォルトではflexコンテナではないため、
-       そのままだと唯一の子要素（リンク）と追加したドメインバッジが横並びにならず縦に積まれてしまう。 */
-    .purchaseLink__container {
+    /* .purchaseLink__container自体には一切スタイルを当てない
+       （寸法が変わるとアイコンの縦位置や、このコンテナの矩形を基準にしているとみられるSoundCloud純正の
+       「Stream / Buy」ツールチップの位置がずれる。
+       また同コンテナにoverflow:hiddenが掛かっているらしく、position:absoluteで外側にはみ出す構成だと
+       バッジ自体が見えなくなってしまった）。
+       代わりに、コンテナとバッジを両方くるむ新しいラッパー要素（insertPurchaseLinkDomains()が生成）側でflexにする。
+       align-selfは、外側の行がbaseline基準の縦揺れを持っていた場合でも、
+       他のアクションアイコンと縦位置を揃えるための保険。 */
+    .${PURCHASE_LINK_WRAPPER_CLASS} {
       display: inline-flex !important;
       align-items: center !important;
+      align-self: center !important;
     }
     .${PURCHASE_LINK_DOMAIN_CLASS} {
       margin-left: 4px;
       font-size: 11px;
       color: var(--secondary-text-color, #999) !important;
       white-space: nowrap;
-      vertical-align: middle;
     }
     .${STATE_SUCCESS_CLASS},
     .${STATE_SUCCESS_CLASS} svg,
@@ -1312,17 +1319,26 @@
 
   function insertPurchaseLinkDomains() {
     document.querySelectorAll('.soundActions__purchaseLink').forEach((link) => {
-      if (link.nextElementSibling?.classList.contains(PURCHASE_LINK_DOMAIN_CLASS)) return;
+      // リンク自身はアイコンサイズの小さなボックスなので、内側に追加すると見えない形でクリップされてしまう。
+      // .purchaseLink__container（親コンテナ）も同様にoverflow:hiddenらしく、
+      // その内側で見た目だけ外にはみ出す構成（position:absoluteなど）でもクリップされて見えなくなる。
+      // そのため、コンテナ自体の寸法・スタイルには一切触れず、コンテナとバッジを両方くるむ
+      // 新しいラッパー要素をDOM上でコンテナの位置に差し替える形にする。
+      const container = link.closest('.purchaseLink__container') || link;
+      if (container.parentElement?.classList.contains(PURCHASE_LINK_WRAPPER_CLASS)) return;
       const href = link.getAttribute('href');
       const domain = href && extractLinkDomain(href);
       if (!domain) return;
+
+      const wrapper = document.createElement('span');
+      wrapper.className = PURCHASE_LINK_WRAPPER_CLASS;
+      container.replaceWith(wrapper);
+      wrapper.appendChild(container);
+
       const badge = document.createElement('span');
       badge.className = PURCHASE_LINK_DOMAIN_CLASS;
       badge.textContent = domain;
-      // リンク自身はアイコンサイズの小さなボックスなので（内側に追加すると見えない形でクリップされてしまった）、
-      // 代わりにその外側の兄弟要素として置く —
-      // それだけでは横並びにするのに不十分な理由は下の.purchaseLink__containerのCSS上書きを参照。
-      link.insertAdjacentElement('afterend', badge);
+      wrapper.appendChild(badge);
     });
   }
 
