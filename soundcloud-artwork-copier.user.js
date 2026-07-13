@@ -1025,6 +1025,46 @@
     (button._iconTarget || button).innerHTML = svg;
   }
 
+  function attachSoundCloudTooltip(el, text) {
+    // Reuses SoundCloud's own tooltip classes/markup (arrow + bubble) so it
+    // picks up the site's existing CSS for free, instead of the plain OS
+    // tooltip a native `title` attribute would show.
+    let tooltipEl = null;
+
+    const show = () => {
+      tooltipEl = document.createElement('div');
+      tooltipEl.setAttribute('role', 'tooltip');
+      tooltipEl.className = 'tooltip g-z-index-overlay g-opacity-transition sc-selection-disabled';
+      tooltipEl.style.position = 'absolute';
+      tooltipEl.style.width = 'auto';
+      tooltipEl.style.minHeight = 'auto';
+
+      const arrow = document.createElement('div');
+      arrow.className = 'tooltip__arrow';
+      const content = document.createElement('div');
+      content.className = 'tooltip__content sc-text-captions';
+      content.textContent = text;
+      tooltipEl.append(arrow, content);
+      document.body.appendChild(tooltipEl);
+
+      const elRect = el.getBoundingClientRect();
+      const tooltipRect = tooltipEl.getBoundingClientRect();
+      tooltipEl.style.top = `${elRect.top + window.scrollY - tooltipRect.height - 8}px`;
+      tooltipEl.style.left = `${elRect.left + window.scrollX + elRect.width / 2 - tooltipRect.width / 2}px`;
+
+      requestAnimationFrame(() => tooltipEl?.classList.add('m-is-visible'));
+    };
+
+    const hide = () => {
+      tooltipEl?.remove();
+      tooltipEl = null;
+    };
+
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('blur', hide);
+  }
+
   function showToast(message) {
     let container = document.getElementById(TOAST_CONTAINER_ID);
     if (!container) {
@@ -1095,8 +1135,8 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `${extraClasses} ${TILE_BUTTON_CLASS}`;
-    button.title = 'Copy artwork';
     button.setAttribute('aria-label', 'Copy artwork');
+    attachSoundCloudTooltip(button, 'Copy artwork');
 
     const iconWrapper = document.createElement('div');
     iconWrapper.innerHTML = icon;
