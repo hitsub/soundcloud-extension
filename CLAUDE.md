@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## これは何か
 
-soundcloud.comにジャケット画像コピーボタンとメタデータタグ付きダウンロード機能を追加する、単一ファイルのTampermonkeyユーザースクリプト（`soundcloud-artwork-copier.user.js`）。ビルドシステム、package.json、バンドラー、リンター、テストスイートは無い — 1つのIIFEにまとめたプレーンなvanilla JSで、Tampermonkeyが直接読み込む。ユーザー向けの機能一覧と日本語の利用メモは`README.md`を参照。
+soundcloud.comにジャケット画像コピーボタンとメタデータタグ付きダウンロード機能を追加する、単一ファイルのTampermonkeyユーザースクリプト（`soundcloud-menu-extension.user.js`）。ビルドシステム、package.json、バンドラー、リンター、テストスイートは無い — 1つのIIFEにまとめたプレーンなvanilla JSで、Tampermonkeyが直接読み込む。ユーザー向けの機能一覧と日本語の利用メモは`README.md`を参照。
 
 ## 開発ワークフロー
 
 ビルド/lint/testコマンドは無い — このプロジェクトにはそれらが存在しない。変更を確認する手順:
-1. `soundcloud-artwork-copier.user.js`を直接編集する。
+1. `soundcloud-menu-extension.user.js`を直接編集する。
 2. Tampermonkeyのダッシュボードで、スクリプトの中身を更新後の内容に貼り替える（ディスクからインストールしている場合はリロード）。
 3. soundcloud.com上で手動テストする — どの機能もログイン済みセッションが必要。
 
