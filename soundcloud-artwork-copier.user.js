@@ -188,6 +188,13 @@
     .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS} {
       display: none;
     }
+    /* Not itself a flex container by default, so its one child (the link)
+       and our appended domain badge would otherwise stack vertically
+       instead of sitting side by side. */
+    .purchaseLink__container {
+      display: inline-flex !important;
+      align-items: center !important;
+    }
     .${PURCHASE_LINK_DOMAIN_CLASS} {
       margin-left: 4px;
       font-size: 11px;
@@ -1227,17 +1234,18 @@
 
   function insertPurchaseLinkDomains() {
     document.querySelectorAll('.soundActions__purchaseLink').forEach((link) => {
-      if (link.querySelector(`.${PURCHASE_LINK_DOMAIN_CLASS}`)) return;
+      if (link.nextElementSibling?.classList.contains(PURCHASE_LINK_DOMAIN_CLASS)) return;
       const href = link.getAttribute('href');
       const domain = href && extractLinkDomain(href);
       if (!domain) return;
       const badge = document.createElement('span');
       badge.className = PURCHASE_LINK_DOMAIN_CLASS;
       badge.textContent = domain;
-      // Appended inside the link (alongside its icon span) rather than as
-      // an external sibling — .purchaseLink__container isn't a flex
-      // container, so a sibling wrapped onto its own line below the icon.
-      link.appendChild(badge);
+      // The link itself is a small icon-sized box (appending inside it
+      // clipped the badge invisibly), so this sits outside it as a
+      // sibling instead — see the .purchaseLink__container CSS override
+      // below for why that alone isn't enough to keep them on one line.
+      link.insertAdjacentElement('afterend', badge);
     });
   }
 
