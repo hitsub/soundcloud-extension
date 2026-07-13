@@ -33,7 +33,10 @@
     }
     if (typeof value.permalink_url === 'string' && typeof value.downloadable === 'boolean') {
       const path = permalinkPath(value.permalink_url);
-      if (path) downloadableByPath.set(path, value.downloadable);
+      // downloadable can stay true even after a track's download quota
+      // (download_count) runs out — has_downloads_left is what actually
+      // gates whether the native "Download file" item shows up.
+      if (path) downloadableByPath.set(path, value.downloadable && value.has_downloads_left !== false);
     }
     for (const key of Object.keys(value)) {
       recordDownloadableInfo(value[key], depth + 1);
