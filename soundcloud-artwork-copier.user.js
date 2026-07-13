@@ -131,12 +131,6 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .${TILE_BUTTON_CLASS},
-    .${TILE_BUTTON_CLASS} svg,
-    .${TILE_BUTTON_CLASS} svg * {
-      color: #ff5500 !important;
-      fill: #ff5500 !important;
-    }
     .${DOWNLOAD_BUTTON_CLASS},
     .${DOWNLOAD_BUTTON_CLASS} svg,
     .${DOWNLOAD_BUTTON_CLASS} svg *,
@@ -160,7 +154,6 @@
     /* Our forced color/fill above blocks the native buttons' own :hover
        fade, so re-add the same fade explicitly to stay consistent with
        sibling buttons (Like/Follow/More etc.) on hover. */
-    .${TILE_BUTTON_CLASS}:hover,
     .${DOWNLOAD_BUTTON_CLASS}:hover,
     .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS}:hover {
       opacity: 0.7 !important;
