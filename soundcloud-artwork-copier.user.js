@@ -2,7 +2,7 @@
 // @name         SoundCloud Menu Extension
 // @namespace    https://github.com/hitsub/sc-jacket-extensions
 // @version      0.3.0
-// @description  Copy track artwork from track tiles/rows/the hero page, or the More menu, and download files with missing title/artist/album/artwork tags filled in automatically (WAV/MP3/FLAC)
+// @description  トラックのタイル/行/単体ページ、またはMoreメニューからジャケット画像をコピーし、タイトル・アーティスト・アルバム・ジャケット画像タグが未設定のファイルをダウンロード時に自動で埋め込む（WAV/MP3/FLAC）
 // @author       hitsub
 // @match        *://soundcloud.com/*
 // @grant        none
@@ -23,9 +23,10 @@
   }
 
   function recordDownloadableInfo(value, depth = 0) {
-    // Generic recursive scan rather than hard-coding every api-v2 response
-    // shape (stream/likes/playlist/search collections all nest track
-    // objects differently) — any object with both fields is a track.
+    // api-v2の各レスポンス形状（stream/likes/playlist/searchのコレクションは
+    // それぞれ違う形でトラックオブジェクトをネストしている）を個別にハード
+    // コーディングせず、汎用的に再帰スキャンする。両方のフィールドを持つ
+    // オブジェクトはすべてトラックとみなす。
     if (!value || typeof value !== 'object' || depth > 6) return;
     if (Array.isArray(value)) {
       value.forEach((item) => recordDownloadableInfo(item, depth + 1));
@@ -33,9 +34,9 @@
     }
     if (typeof value.permalink_url === 'string' && typeof value.downloadable === 'boolean') {
       const path = permalinkPath(value.permalink_url);
-      // downloadable can stay true even after a track's download quota
-      // (download_count) runs out — has_downloads_left is what actually
-      // gates whether the native "Download file" item shows up.
+      // downloadableはトラックのダウンロード数上限（download_count）を
+      // 使い切った後もtrueのままになりうる — 実際にネイティブの
+      // 「Download file」項目が出るかどうかはhas_downloads_leftで決まる。
       if (path) downloadableByPath.set(path, value.downloadable && value.has_downloads_left !== false);
     }
     for (const key of Object.keys(value)) {
@@ -44,11 +45,11 @@
   }
 
   function patchFetchForDownloadableInfo() {
-    // Passively read the JSON SoundCloud's own app already fetches to
-    // render track lists (stream/likes/playlists/search all go through
-    // api-v2), rather than issuing our own extra requests per visible
-    // track. @run-at document-start so this is installed before the page's
-    // own scripts start making these calls.
+    // 表示中の各トラックについて追加のリクエストを投げるのではなく、
+    // SoundCloud自身のアプリがトラック一覧描画のためにすでに取得している
+    // JSON（stream/likes/playlist/searchはすべてapi-v2経由）を横から読む。
+    // ページ自身のスクリプトがこれらの呼び出しを始める前に組み込む必要が
+    // あるため、@run-at document-startにしている。
     const nativeFetch = window.fetch;
     if (typeof nativeFetch !== 'function') return;
     window.fetch = function (...args) {
@@ -70,9 +71,8 @@
   patchFetchForDownloadableInfo();
 
   function patchXhrForDownloadableInfo() {
-    // SoundCloud's own list-loading requests (e.g. track_likes) turn out to
-    // go through XMLHttpRequest rather than fetch, so that needs the same
-    // passive-read treatment.
+    // SoundCloud自身の一覧取得リクエスト（track_likesなど）はfetchではなく
+    // XMLHttpRequest経由であることが判明したため、同様の横読み処理が必要。
     const nativeOpen = XMLHttpRequest.prototype.open;
     const nativeSend = XMLHttpRequest.prototype.send;
     if (typeof nativeOpen !== 'function' || typeof nativeSend !== 'function') return;
@@ -89,7 +89,7 @@
             recordDownloadableInfo(JSON.parse(this.responseText));
             highlightDownloadableTriggers();
           } catch {
-            // Not JSON, or not a shape we care about — ignore.
+            // JSONでない、または対象の形状でない場合は無視する。
           }
         });
       }
@@ -109,9 +109,9 @@
   const TILE_BUTTON_CLASS = 'scArtworkCopy__tileButton';
   const DOWNLOAD_BUTTON_CLASS = 'scArtworkCopy__downloadButton';
   const MORE_BUTTON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownload';
-  // The grid ("Badges") tile's More button sits directly on top of the
-  // artwork image (like the tile copy button), so it keeps the older
-  // icon-color treatment instead of the outline used everywhere else.
+  // グリッド（Badges）タイルのMoreボタンはジャケット画像の真上に乗るため
+  // （コピー用ボタンと同様に）、他の箇所で使うアウトラインではなく従来の
+  // アイコン色変更の方式を維持する。
   const MORE_BUTTON_ICON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownloadIcon';
   const INLINE_DOWNLOAD_ICON_CLASS = 'scArtworkCopy__inlineDownloadIcon';
   const PURCHASE_LINK_DOMAIN_CLASS = 'scArtworkCopy__purchaseLinkDomain';
@@ -129,7 +129,7 @@
   const ICON_FAILURE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41L10.59 13.42l-6.3 6.3 1.41 1.41 6.3-6.3 6.3 6.3 1.41-1.41-6.3-6.3 6.3-6.3z"/></svg>';
   const ICON_LOADING = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
   const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7ZM5 18v2h14v-2H5Z"/></svg>';
-  // Font Awesome Free 6.7.2 "clipboard" (solid) — CC BY 4.0.
+  // Font Awesome Free 6.7.2の「clipboard」（塗りつぶし）アイコン — CC BY 4.0。
   const ICON_CLIPBOARD_SOLID = '<svg viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M192 0c-41.8 0-77.4 26.7-90.5 64L64 64C28.7 64 0 92.7 0 128L0 448c0 35.3 28.7 64 64 64l256 0c35.3 0 64-28.7 64-64l0-320c0-35.3-28.7-64-64-64l-37.5 0C269.4 26.7 233.8 0 192 0zm0 64a32 32 0 1 1 0 64 32 32 0 1 1 0-64zM112 192l160 0c8.8 0 16 7.2 16 16s-7.2 16-16 16l-160 0c-8.8 0-16-7.2-16-16s7.2-16 16-16z"/></svg>';
 
   const style = document.createElement('style');
@@ -142,9 +142,9 @@
       fill: #ff5500 !important;
     }
     .${MORE_BUTTON_HIGHLIGHT_CLASS} {
-      /* Negative offset draws the outline inside the button's own box
-         instead of protruding outward — an outward box-shadow/outline got
-         clipped unevenly by the list row's tightly packed button group. */
+      /* マイナスのoffsetでアウトラインをボタンの内側に描く（外側にはみ出す
+         box-shadow/outlineは、リスト行の詰まったボタングループによって
+         不均一に切り取られてしまっていた）。 */
       outline: 2px solid #ff5500 !important;
       outline-offset: -2px;
     }
@@ -154,9 +154,9 @@
       color: #ff5500 !important;
       fill: #ff5500 !important;
     }
-    /* Our forced color/fill above blocks the native buttons' own :hover
-       fade, so re-add the same fade explicitly to stay consistent with
-       sibling buttons (Like/Follow/More etc.) on hover. */
+    /* 上で強制しているcolor/fillがネイティブボタン自身の:hoverフェードを
+       妨げてしまうため、隣のボタン（Like/Follow/Moreなど）と挙動を揃える
+       ために同じフェードを明示的に再定義する。 */
     .${DOWNLOAD_BUTTON_CLASS}:hover,
     .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS}:hover {
       opacity: 0.7 !important;
@@ -175,18 +175,17 @@
       width: 16px;
       height: 16px;
     }
-    /* The row's own hover state reveals a native overlay/menu over this
-       same area, which both visually clashes with and steals clicks from
-       this icon — hide it while that's showing rather than fight it. The
-       same overlay also stays revealed for the currently playing row
-       (marked with the "active" class) even without hovering it. */
+    /* 行自体のホバー状態になると、このアイコンと同じ場所にSoundCloud側の
+       オーバーレイ/メニューが表示され、見た目もクリックも競合してしまう
+       ため、対抗せずに表示中はこのアイコンを隠す。同じオーバーレイは
+       再生中の行（"active"クラスが付く）でもホバーなしで表示され続ける。 */
     .trackItem:hover .${INLINE_DOWNLOAD_ICON_CLASS},
     .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS} {
       display: none;
     }
-    /* Not itself a flex container by default, so its one child (the link)
-       and our appended domain badge would otherwise stack vertically
-       instead of sitting side by side. */
+    /* デフォルトではflexコンテナではないため、そのままだと唯一の子要素
+       （リンク）と追加したドメインバッジが横並びにならず縦に積まれて
+       しまう。 */
     .purchaseLink__container {
       display: inline-flex !important;
       align-items: center !important;
@@ -303,9 +302,9 @@
   };
 
   function failWith(code, params) {
-    // The English code/params combo stays in .message so console.error
-    // output is still useful for debugging regardless of locale; the
-    // localized text for the toast is looked up separately from .code.
+    // 英語のcode/paramsの組み合わせを.messageに残しておくことで、言語設定に
+    // 関わらずconsole.errorの出力がデバッグに使える状態を保つ。トースト用の
+    // ローカライズ文言は.codeから別途引く。
     const err = new Error(params ? `${code} ${JSON.stringify(params)}` : code);
     err.code = code;
     err.params = params || {};
@@ -327,9 +326,9 @@
   }
 
   function getHighResUrl(baseUrl) {
-    // The web app's own rendered DOM uses "-t{width}x{height}" (e.g.
-    // -t500x500), but the /resolve API's artwork_url field uses SoundCloud's
-    // older "-large" convention instead — match either.
+    // Webアプリ自身が描画するDOMは"-t{width}x{height}"（例: -t500x500）を
+    // 使うが、/resolve APIのartwork_urlフィールドはSoundCloudの古い
+    // "-large"表記を使う — どちらにもマッチさせる。
     return baseUrl.replace(/-(?:t\d+x\d+|large)(?=\.\w+$)/, '-original');
   }
 
@@ -346,18 +345,18 @@
     if (!response.ok) failWith('FETCH_ARTWORK_FAILED', { status: response.status });
 
     let blob = await response.blob();
-    // Only image/png is guaranteed writable to the clipboard; some
-    // artworks (particularly ones without a "-original" high-res variant)
-    // are served as image/jpeg, which some browsers reject outright.
+    // クリップボードへの書き込みが保証されるのはimage/pngのみ。一部の
+    // ジャケット画像（特に"-original"の高解像度版が無いもの）は
+    // image/jpegで配信されており、ブラウザによっては書き込みを拒否する。
     if (blob.type !== 'image/png') blob = await convertBlobToPng(blob);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
   }
 
   async function copyArtwork() {
-    // Routed through the same api-v2 /resolve call the download feature
-    // uses, rather than fetch()-ing the page's own HTML for its meta tags:
-    // that HTML fetch is what was intermittently redirected to
-    // m.soundcloud.com and blocked by CORS (SoundCloud's bot defenses).
+    // ページ自身のHTMLをfetch()してmetaタグを読む方式ではなく、ダウンロード
+    // 機能と同じapi-v2の/resolve呼び出しを経由する。そのHTML fetchこそが
+    // 断続的にm.soundcloud.comへリダイレクトされCORSでブロックされていた
+    // もの（SoundCloudのbot対策）。
     let trackData;
     try {
       trackData = await fetchTrackData(location.href);
@@ -370,9 +369,9 @@
   }
 
   function getArtworkUrlFromTile(artworkEl) {
-    // The wrapping <div> around the artwork also carries an "sc-artwork"
-    // class, but only the inner <span> has the background-image inline
-    // style, so scope the lookup to that span specifically.
+    // ジャケット画像を包む<div>にも"sc-artwork"クラスが付いているが、
+    // background-imageのインラインstyleを持つのは内側の<span>だけなので、
+    // そのspanに絞って探す。
     const span = artworkEl.querySelector('span.sc-artwork');
     const match = span?.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/);
     return match ? match[1] : null;
@@ -398,7 +397,7 @@
   function parseWavChunks(buffer) {
     const view = new DataView(buffer);
     const chunks = [];
-    let offset = 12; // skip "RIFF" + size + "WAVE"
+    let offset = 12; // "RIFF" + size + "WAVE" をスキップ
     while (offset + 8 <= buffer.byteLength) {
       const id = String.fromCharCode(
         view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3)
@@ -426,7 +425,7 @@
   function readInfoValues(buffer, infoChunk) {
     const view = new DataView(buffer);
     const values = {};
-    let offset = infoChunk.dataStart + 4; // skip the "INFO" list-type marker
+    let offset = infoChunk.dataStart + 4; // "INFO" のlist-typeマーカーをスキップ
     const end = infoChunk.dataStart + infoChunk.size;
     while (offset + 8 <= end) {
       const id = String.fromCharCode(
@@ -485,8 +484,8 @@
       const insertAt = fallbackInsertChunk ? fallbackInsertChunk.start : original.length;
       spliced = concatBytes([original.subarray(0, insertAt), newChunkBytes, original.subarray(insertAt)]);
     }
-    // The top-level RIFF size field covers everything after itself, so it
-    // needs correcting whenever the file's total length changes.
+    // 最上位のRIFFサイズフィールドはそれ以降の全体を表すので、ファイル全体の
+    // 長さが変わるたびに補正が必要。
     new DataView(spliced.buffer).setUint32(4, spliced.byteLength - 8, true);
     return spliced.buffer;
   }
@@ -496,7 +495,7 @@
     const existingInfo = findInfoChunk(buffer, chunks);
     const existingValues = existingInfo ? readInfoValues(buffer, existingInfo) : {};
 
-    // Only fill in whatever the file doesn't already have set.
+    // ファイルにまだ設定されていない項目だけを埋める。
     const resolvedFields = {
       title: existingValues.INAM || fields.title,
       artist: existingValues.IART || fields.artist,
@@ -510,11 +509,12 @@
       chunks.find((c) => c.id === 'data')
     );
 
-    // WAV's own LIST/INFO chunk has no artwork convention, so artwork (and,
-    // redundantly, the same text fields for players that only read this
-    // chunk) goes into a non-standard but ffmpeg/mutagen-recognized "id3 "
-    // chunk holding a full ID3v2 tag — the same format/frames as the MP3
-    // path. Chunk offsets shift after the splice above, so re-parse first.
+    // WAV自体のLIST/INFOチャンクにはジャケット画像の規約が無いため、
+    // ジャケット画像（および、このチャンクしか読まないプレイヤー向けに
+    // 重複して同じテキスト項目も）は、非標準だがffmpeg/mutagenが認識する
+    // "id3 "チャンク（中身は丸ごとID3v2タグ、MP3側と同じフォーマット/
+    // フレーム）に入れる。上のspliceでチャンクのオフセットがずれるため、
+    // 先に再パースする。
     chunks = parseWavChunks(buffer);
     const existingId3Chunk = chunks.find((c) => c.id.toLowerCase() === 'id3 ');
     const existingId3Data = existingId3Chunk
@@ -541,7 +541,7 @@
     const encoding = bytes[0];
     const rest = bytes.subarray(1);
     if (encoding === 1 || encoding === 2) {
-      // UTF-16, with or without a leading BOM.
+      // UTF-16。先頭にBOMが付いている場合と付いていない場合がある。
       let start = 0;
       let littleEndian = encoding === 1;
       if (rest.length >= 2 && rest[0] === 0xff && rest[1] === 0xfe) {
@@ -583,10 +583,9 @@
   }
 
   function parseExistingId3(buffer) {
-    // Only reads the frames we care about preserving (TIT2/TALB/TPE1/TCON/
-    // APIC); anything else in the tag is intentionally not round-tripped
-    // since browser-id3-writer always builds a brand-new tag from what we
-    // set.
+    // 保持したいフレーム（TIT2/TALB/TPE1/TCON/APIC）だけを読む。
+    // browser-id3-writerは常にこちらが設定した内容から新規にタグを
+    // 組み立てるため、タグ内のそれ以外の情報は意図的に引き継がない。
     const bytes = new Uint8Array(buffer);
     const result = {};
     if (bytes.length < 10 || bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return result;
@@ -626,10 +625,10 @@
   }
 
   async function buildId3Tag(existing, fields, seedBuffer) {
-    // seedBuffer is the real MP3 bytes when tagging an actual MP3 (so the
-    // audio survives the rewrite), or an empty buffer when we just want the
-    // standalone tag bytes (e.g. to embed in a WAV "id3 " chunk).
-    // Pinned to the exact version whose source was reviewed before use.
+    // seedBufferは、実際のMP3にタグを付ける場合は本物のMP3バイト列
+    // （書き換え後も音声データが残るように）、タグ単体のバイト列だけが
+    // 欲しい場合（WAVの"id3 "チャンクに埋め込む場合など）は空のバッファ。
+    // 使用前にソースをレビュー済みの、特定バージョンに固定している。
     const { ID3Writer } = await import(
       'https://unpkg.com/browser-id3-writer@6.3.1/dist/browser-id3-writer.mjs'
     );
@@ -667,7 +666,7 @@
   function parseFlacBlocks(buffer) {
     const view = new DataView(buffer);
     const blocks = [];
-    let offset = 4; // skip "fLaC" magic
+    let offset = 4; // "fLaC" のマジックナンバーをスキップ
     while (offset + 4 <= buffer.byteLength) {
       const headerByte = view.getUint8(offset);
       const isLast = (headerByte & 0x80) !== 0;
@@ -681,9 +680,9 @@
   }
 
   function readVorbisComments(buffer, block) {
-    // Metadata block headers and the PICTURE block use big-endian, but
-    // Vorbis comment fields are little-endian — inherited as-is from the
-    // original Ogg Vorbis comment spec.
+    // メタデータブロックのヘッダーとPICTUREブロックはビッグエンディアン
+    // だが、Vorbisコメントのフィールドはリトルエンディアン — 元のOgg
+    // Vorbisコメント仕様をそのまま引き継いだ挙動。
     const view = new DataView(buffer);
     let offset = block.dataStart;
     const vendorLength = view.getUint32(offset, true);
@@ -713,16 +712,16 @@
     const mimeType = new TextDecoder('ascii').decode(new Uint8Array(buffer, offset, mimeLength));
     offset += mimeLength;
     const descLength = view.getUint32(offset, false);
-    offset += 4 + descLength; // description text isn't something we round-trip
-    offset += 16; // width, height, color depth, indexed-color count
+    offset += 4 + descLength; // description（説明文）は引き継がない
+    offset += 16; // width, height, color depth, indexed-color count（幅・高さ・色深度・インデックスカラー数）
     const dataLength = view.getUint32(offset, false);
     offset += 4;
     return { pictureType, mimeType, data: new Uint8Array(buffer, offset, dataLength) };
   }
 
   function buildFlacMetadataBlock(type, data) {
-    // The last-block flag gets fixed up once the final block order is
-    // known, so this always constructs with it cleared.
+    // 最終的なブロックの並び順が確定した時点でlast-blockフラグを調整する
+    // ので、ここでは常にクリアした状態で組み立てる。
     const header = new Uint8Array(4);
     header[0] = type & 0x7f;
     header[1] = (data.length >> 16) & 0xff;
@@ -765,8 +764,8 @@
       be32(pictureType),
       be32(mimeBytes.length),
       mimeBytes,
-      be32(0), // no description
-      new Uint8Array(16), // width, height, color depth, indexed-color count: unknown
+      be32(0), // description（説明文）なし
+      new Uint8Array(16), // width, height, color depth, indexed-color count（幅・高さ・色深度・インデックスカラー数）: 不明
       be32(pictureData.byteLength),
       new Uint8Array(pictureData),
     ];
@@ -795,15 +794,15 @@
       pictureBlockBytes = buildPictureBlock(artwork.mimeType, artwork.data);
     }
 
-    // STREAMINFO (type 0) must stay first; everything else (PADDING,
-    // APPLICATION, SEEKTABLE, CUESHEET, ...) is kept as-is, just with our
-    // comment/picture blocks replacing whatever was there before, inserted
-    // right after STREAMINFO.
+    // STREAMINFO（type 0）は必ず先頭に置く。それ以外（PADDING、
+    // APPLICATION、SEEKTABLE、CUESHEETなど）はそのまま残し、コメント/
+    // ピクチャーブロックだけを、以前あったものを置き換える形でSTREAMINFO
+    // の直後に挿入する。
     const original = new Uint8Array(buffer);
     const keptBlocks = blocks.filter((b) => b.type !== 4 && b.type !== 6).map((b) => original.slice(b.start, b.start + 4 + b.length));
 
     const newBlocks = [
-      keptBlocks[0], // STREAMINFO
+      keptBlocks[0], // STREAMINFOブロック
       commentBlockBytes,
       ...(pictureBlockBytes ? [pictureBlockBytes] : []),
       ...keptBlocks.slice(1),
@@ -822,8 +821,9 @@
   }
 
   function getOAuthToken() {
-    // api-v2 endpoints like the download one require this in addition to
-    // client_id + cookies; it's not httpOnly, so it's readable here.
+    // ダウンロード用エンドポイントなどのapi-v2エンドポイントは、
+    // client_id + cookieに加えてこれも必要とする。httpOnlyではないので
+    // ここから読み取れる。
     const match = document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);
     return match ? decodeURIComponent(match[1]) : null;
   }
@@ -834,13 +834,13 @@
   }
 
   async function fetchTrackData(url) {
-    // A plain fetch() of the track's HTML page gets redirected to
-    // m.soundcloud.com and blocked by CORS — SoundCloud's bot defenses
-    // (DataDome) appear to flag script-issued fetches of page HTML even
-    // for the page currently being viewed. The api-v2 resolve endpoint is
-    // the same kind of AJAX call the download endpoint already uses
-    // successfully, and returns the track JSON directly (no HTML/hydration
-    // parsing needed).
+    // トラックのHTMLページを単純にfetch()するとm.soundcloud.comへ
+    // リダイレクトされCORSでブロックされる — SoundCloudのbot対策
+    // （DataDome）が、今まさに見ているページであってもスクリプトからの
+    // ページHTML取得をフラグ立てしているようだ。api-v2のresolve
+    // エンドポイントは、ダウンロード用エンドポイントですでにうまく
+    // いっているのと同種のAJAX呼び出しで、トラックのJSONを直接返して
+    // くれる（HTML/hydrationのパースが不要）。
     const { clientId } = getSessionCredentials();
     const resolveUrl = `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url)}&client_id=${encodeURIComponent(clientId)}`;
     const response = await fetch(resolveUrl, { credentials: 'include', headers: authHeaders() });
@@ -858,8 +858,9 @@
   }
 
   function getSessionCredentials() {
-    // Unlike the track id, client_id/app_version are session-level, not
-    // per-track, so the live page's own globals are always current.
+    // トラックIDと違い、client_id/app_versionはトラックごとではなく
+    // セッション単位の値なので、今表示しているページ自身のグローバル
+    // 変数は常に最新。
     const clientId = getHydrationEntry(window.__sc_hydration, 'apiClient')?.id;
     const appVersion = window.__sc_version;
     if (!clientId || !appVersion) failWith('MISSING_SESSION_CREDENTIALS');
@@ -888,10 +889,10 @@
     const wave = bytes.length >= 12 ? String.fromCharCode(...bytes.subarray(8, 12)) : '';
     if (riff === 'RIFF' && wave === 'WAVE') return 'wav';
 
-    const isFlac = bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43; // "fLaC"
+    const isFlac = bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43; // "fLaC" のマジックナンバー
     if (isFlac || contentType.includes('flac')) return 'flac';
 
-    const isId3 = bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33; // "ID3"
+    const isId3 = bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33; // "ID3" のマジックナンバー
     const isMpegSync = bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
     if (isId3 || isMpegSync || contentType.includes('mpeg')) return 'mp3';
 
@@ -911,11 +912,11 @@
   }
 
   function permalinkFromScope(triggerEl) {
-    // On the track's own hero page there's no tile/row wrapping the
-    // trigger, so falling back to the current page's URL is exactly the
-    // right answer there. Playlist track rows (.trackItem) have no
-    // artwork/title link matching the other two shapes, so they need their
-    // own link selector (.trackItem__trackTitle).
+    // トラック自身の単体ページでは、トリガーを包むタイル/行が存在しない
+    // ため、現在のページURLにフォールバックするのがそこでは正解になる。
+    // プレイリストのトラック行（.trackItem）は他の2パターンと一致する
+    // ジャケット/タイトルリンクを持たないため、専用のリンクセレクタ
+    // （.trackItem__trackTitle）が必要。
     const scope = triggerEl?.closest('.playableTile, .sound__body, .trackItem') ?? null;
     const link = scope?.querySelector('.playableTile__artworkLink, .sound__coverArt, .trackItem__trackTitle');
     const href = link?.getAttribute('href');
@@ -923,18 +924,18 @@
   }
 
   function resolveTrackPermalink(dropdownEl) {
-    // Dropdowns are portaled away from the tile/row that opened them, so
-    // they can't be found by DOM proximity. The trigger button links back
-    // to its dropdown via aria-owns; from there, walk up to the tile/row
-    // that owns the trigger and read the track link straight from it.
+    // ドロップダウンは、それを開いたタイル/行とは別の場所にポータル
+    // されるため、DOM上の近さでは見つけられない。トリガーボタンは
+    // aria-ownsで自分のドロップダウンと紐づいているので、そこから
+    // トリガーを持つタイル/行まで遡り、トラックへのリンクを直接読む。
     const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
     return permalinkFromScope(trigger);
   }
 
   function createInlineDownloadIcon() {
-    // Not a button: the row's own hover state reveals a native
-    // overlay/menu covering this same spot that steals the click, so this
-    // is a purely visual indicator instead of an interactive one.
+    // ボタンにはしない: 行自体のホバー状態になると、この同じ場所を覆う
+    // ネイティブのオーバーレイ/メニューが出てクリックを奪ってしまうため、
+    // これは操作可能な要素ではなく純粋な視覚的インジケーターとする。
     const icon = document.createElement('span');
     icon.className = INLINE_DOWNLOAD_ICON_CLASS;
     icon.title = 'Downloadable';
@@ -944,9 +945,10 @@
   }
 
   function insertInlinePlaylistDownloadIcon(trigger) {
-    // Playlist rows are dense enough that a hover-revealed "More" button
-    // felt too hidden — show a standing indicator left of the play count
-    // instead, for tracks already known to be downloadable.
+    // プレイリストの行は密集していて、ホバーで出てくる「More」ボタンだけ
+    // では見つけにくいと判断したため、既にダウンロード可能と分かっている
+    // トラックについては、代わりに再生回数の左に常時表示のインジケーター
+    // を出す。
     const row = trigger.closest('.trackItem');
     if (!row || row.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)) return;
     const playCount = row.querySelector('.trackItem__playCount');
@@ -955,31 +957,31 @@
   }
 
   function markTriggerDownloadable(trigger) {
-    // The grid tile's More button sits on top of the artwork, so it keeps
-    // the icon-color treatment instead of the outline used elsewhere.
+    // グリッドタイルのMoreボタンはジャケット画像の上に乗っているため、
+    // 他の箇所で使うアウトラインではなくアイコン色変更の方式を維持する。
     const isGridTile = !!trigger.closest('.playableTile__actionWrapper');
     trigger.classList.add(isGridTile ? MORE_BUTTON_ICON_HIGHLIGHT_CLASS : MORE_BUTTON_HIGHLIGHT_CLASS);
     insertInlinePlaylistDownloadIcon(trigger);
   }
 
   function clearTriggerDownloadableState(trigger) {
-    // SPA navigation can reuse the very same "More" trigger element for a
-    // different track (e.g. going from one hero page straight to
-    // another), so a highlight from whatever track this node was
-    // previously marked for has to be wiped before re-evaluating rather
-    // than trusted forever.
+    // SPAナビゲーションでは、まったく同じ「More」トリガー要素が別の
+    // トラックのために使い回されることがある（例えば、あるトラック単体
+    // ページから別のトラック単体ページへ直接遷移する場合）。そのため、
+    // この要素が以前どのトラックのためにマークされていたとしても、
+    // 永久に信用せず、再評価の前にハイライトを消しておく必要がある。
     trigger.classList.remove(MORE_BUTTON_HIGHLIGHT_CLASS, MORE_BUTTON_ICON_HIGHLIGHT_CLASS);
     trigger.closest('.trackItem')?.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)?.remove();
   }
 
   function highlightDownloadableTriggers() {
-    // Complements insertDownloadButtons()'s open-then-highlight fallback:
-    // this fires as soon as passively-collected data says a track is
-    // downloadable, even before its "More" button has ever been opened.
+    // insertDownloadButtons()の「開いてからハイライトする」フォールバック
+    // を補完するもの: 「More」ボタンが一度も開かれていなくても、横読みで
+    // 集めたデータがダウンロード可能だと示した時点で発火する。
     if (downloadableByPath.size === 0) return;
     document.querySelectorAll('.sc-button-more').forEach((trigger) => {
       const path = permalinkPath(permalinkFromScope(trigger));
-      if (trigger.dataset.scDownloadPath === path) return; // already evaluated for this exact track
+      if (trigger.dataset.scDownloadPath === path) return; // このトラックについてはすでに評価済み
       trigger.dataset.scDownloadPath = path || '';
       if (path && downloadableByPath.get(path)) markTriggerDownloadable(trigger);
       else clearTriggerDownloadableState(trigger);
@@ -1027,8 +1029,8 @@
         artworkUrl: trackData.artworkUrl,
       });
     }
-    // Other formats (e.g. m4a) download unmodified — no equivalent metadata
-    // support implemented for them yet.
+    // それ以外の形式（m4aなど）は無加工でダウンロードされる — 同等の
+    // メタデータ対応はまだ実装していない。
 
     const blob = new Blob([buffer]);
     triggerFileDownload(blob, `${sanitizeFilename(trackData.title)}.${guessExtension(format, contentType)}`);
@@ -1039,9 +1041,9 @@
   }
 
   function attachSoundCloudTooltip(el, text) {
-    // Reuses SoundCloud's own tooltip classes/markup (arrow + bubble) so it
-    // picks up the site's existing CSS for free, instead of the plain OS
-    // tooltip a native `title` attribute would show.
+    // SoundCloud自身のツールチップのクラス/マークアップ（矢印＋吹き出し）
+    // を再利用することで、サイト既存のCSSをそのまま活かす。ネイティブの
+    // `title`属性が出すような素のOSツールチップは使わない。
     let tooltipEl = null;
 
     const show = () => {
@@ -1062,9 +1064,9 @@
 
       const elRect = el.getBoundingClientRect();
       const tooltipRect = tooltipEl.getBoundingClientRect();
-      // SoundCloud's own tooltips sit below their trigger with the arrow
-      // pointing up at it (the arrow's own direction is fixed by their
-      // CSS, not something we control per instance).
+      // SoundCloud自身のツールチップは、トリガーの下側に矢印を上向きに
+      // して表示される（矢印自体の向きは向こうのCSSで固定されており、
+      // インスタンスごとに制御できるものではない）。
       tooltipEl.style.top = `${elRect.bottom + window.scrollY + 12}px`;
       tooltipEl.style.left = `${elRect.left + window.scrollX + elRect.width / 2 - tooltipRect.width / 2}px`;
 
@@ -1109,8 +1111,9 @@
     setIcon(button, isSuccess ? ICON_SUCCESS : ICON_FAILURE);
     button._feedbackTimer = setTimeout(() => {
       button.classList.remove(STATE_SUCCESS_CLASS, STATE_FAILURE_CLASS);
-      // Each button remembers its own idle icon — the download button's
-      // idle icon isn't the same clipboard icon the copy buttons use.
+      // 各ボタンは自分自身のアイドル時アイコンを覚えている —
+      // ダウンロードボタンのアイドル時アイコンは、コピー系ボタンが使う
+      // クリップボードアイコンとは異なる。
       setIcon(button, button._idleIcon || ICON_IDLE);
     }, FEEDBACK_DURATION_MS);
   }
@@ -1144,10 +1147,10 @@
   }
 
   function createTileButton(copyFn, extraClasses, icon) {
-    // Matches the structure/classes of the native action buttons alongside
-    // it (Like/Follow/More on grid tiles, Like/Repost/Share/... on list
-    // rows and the hero page) so it lines up with them visually and
-    // inherits their existing sizing and hover-to-reveal behavior for free.
+    // 隣に並ぶネイティブのアクションボタン（グリッドタイルなら
+    // Like/Follow/More、リスト行や単体ページならLike/Repost/Share/...）
+    // と同じ構造/クラスにすることで、見た目を揃え、既存のサイズ調整や
+    // ホバー時に表示する挙動をそのまま引き継ぐ。
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `${extraClasses} ${TILE_BUTTON_CLASS}`;
@@ -1168,16 +1171,16 @@
     return button;
   }
 
-  // Four distinct track layouts exist on the site: compact grid tiles
-  // (.playableTile__artwork + .playableTile__actionWrapper, e.g. on
-  // /you/likes' "Badges" view), full list rows (.sound__artwork +
-  // .soundActions .sc-button-group, e.g. the "List" view / stream),
-  // playlist track rows (.trackItem__image + .soundActions
-  // .sc-button-group, e.g. /sets/... pages), and the track's own hero page
-  // (.listenEngagement__footer .soundActions .sc-button-group — same
-  // button-group markup as list rows, but not wrapped in a .sound__body
-  // tile/row). Each needs its own way to resolve a copy function and its
-  // own native button classes to match.
+  // サイトには4種類の異なるトラックのレイアウトが存在する: コンパクトな
+  // グリッドタイル（.playableTile__artwork + .playableTile__actionWrapper、
+  // 例: /you/likesの「Badges」表示）、フルサイズのリスト行
+  // （.sound__artwork + .soundActions .sc-button-group、例: 「List」表示
+  // やstream）、プレイリストのトラック行（.trackItem__image +
+  // .soundActions .sc-button-group、例: /sets/...ページ）、そしてトラック
+  // 自身の単体ページ（.listenEngagement__footer .soundActions
+  // .sc-button-group — リスト行と同じボタングループのマークアップだが
+  // .sound__bodyタイル/行には包まれていない）。それぞれについて、コピー
+  // 関数の解決方法とマッチさせるネイティブボタンのクラスが個別に必要。
   const ACTION_ROW_CONFIGS = [
     {
       rowSelector: '.playableTile__actionWrapper',
@@ -1195,16 +1198,16 @@
         const artworkEl = rowEl.closest('.sound__body')?.querySelector('.sound__artwork') ?? null;
         return artworkEl ? () => copyArtworkFromTile(artworkEl) : null;
       },
-      // The outline icon (same as the hero page), not the tile overlay's
-      // Font Awesome solid glyph — that's reserved for the grid view where
-      // it sits directly on the artwork.
+      // アウトラインアイコン（単体ページと同じ）を使う。タイルオーバーレイ
+      // のFont Awesomeの塗りつぶしアイコンは、ジャケット画像の真上に乗る
+      // グリッド表示専用にしている。
       icon: ICON_IDLE,
     },
     {
-      // Playlist track rows reuse the same soundActions button-group
-      // markup as the "List" view, but wrap it in .trackItem (with the
-      // artwork in .trackItem__image) rather than .sound__body, and use
-      // one size class down (sc-button-small, not -medium).
+      // プレイリストのトラック行は「List」表示と同じsoundActions
+      // ボタングループのマークアップを再利用しているが、.sound__body
+      // ではなく.trackItem（ジャケット画像は.trackItem__image）で包まれて
+      // おり、サイズクラスも1段階小さい（-mediumではなくsc-button-small）。
       rowSelector: '.trackItem .soundActions .sc-button-group',
       buttonClasses: 'sc-button-secondary sc-button sc-button-small sc-button-icon sc-button-responsive',
       resolveCopy: (rowEl) => {
@@ -1214,15 +1217,15 @@
       icon: ICON_IDLE,
     },
     {
-      // The hero page's action row isn't inside a .sound__body tile/row, so
-      // there's no DOM artwork element to key off of — reuse copyArtwork(),
-      // the same api-v2-backed lookup the header button uses, since
-      // location.href already is this track's own page.
+      // 単体ページのアクション行は.sound__bodyタイル/行の中には無いため、
+      // 手がかりにできるDOM上のジャケット画像要素が存在しない —
+      // location.href自体がこのトラック自身のページなので、以前のヘッダー
+      // ボタンと同じapi-v2ベースの取得方法であるcopyArtwork()を再利用する。
       rowSelector: '.listenEngagement__footer .soundActions .sc-button-group',
       buttonClasses: 'sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive',
       resolveCopy: () => copyArtwork,
-      // Uses the same icon as the header button rather than the tile
-      // overlay's Font Awesome clipboard glyph.
+      // タイルオーバーレイのFont Awesomeクリップボードアイコンではなく、
+      // 以前のヘッダーボタンと同じアイコンを使う。
       icon: ICON_IDLE,
     },
   ];
@@ -1245,9 +1248,9 @@
   }
 
   function createDownloadButton(dropdownEl) {
-    // Matches the native "Download file" button's classes so it lines up
-    // with it visually; deliberately omits "sc-button-download" itself
-    // since that class is presumably also a JS behavior hook on the site.
+    // 見た目を揃えるため、ネイティブの「Download file」ボタンと同じ
+    // クラスを使う。ただし"sc-button-download"自体は、サイト側でJSの
+    // 挙動フックにもなっていると思われるため、意図的に外している。
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `sc-button-secondary sc-button moreActions__button sc-button-medium sc-button-tertiary ${DOWNLOAD_BUTTON_CLASS}`;
@@ -1271,15 +1274,15 @@
   function extractLinkDomain(href) {
     try {
       const url = new URL(href, location.origin);
-      // Purchase links are often routed through a gate/redirect service
-      // (e.g. gate.sc) with the real destination stashed in a "url" query
-      // param — surface that domain instead of the gate's own.
+      // 購入リンクはゲート/リダイレクトサービス（例: gate.sc）経由に
+      // なっていることが多く、本来の遷移先は"url"クエリパラメータに
+      // 格納されている — ゲート自身のドメインではなくそちらを表示する。
       const wrapped = url.searchParams.get('url');
       if (wrapped) {
         try {
           return new URL(wrapped).hostname.replace(/^www\./, '');
         } catch {
-          // wrapped value wasn't a valid absolute URL — fall through.
+          // wrappedの値が有効な絶対URLではなかった場合はそのまま続行する。
         }
       }
       return url.hostname.replace(/^www\./, '');
@@ -1297,10 +1300,10 @@
       const badge = document.createElement('span');
       badge.className = PURCHASE_LINK_DOMAIN_CLASS;
       badge.textContent = domain;
-      // The link itself is a small icon-sized box (appending inside it
-      // clipped the badge invisibly), so this sits outside it as a
-      // sibling instead — see the .purchaseLink__container CSS override
-      // below for why that alone isn't enough to keep them on one line.
+      // リンク自身はアイコンサイズの小さなボックスなので（内側に追加
+      // すると見えない形でクリップされてしまった）、代わりにその外側の
+      // 兄弟要素として置く — それだけでは横並びにするのに不十分な理由は
+      // 下の.purchaseLink__containerのCSS上書きを参照。
       link.insertAdjacentElement('afterend', badge);
     });
   }
@@ -1312,15 +1315,15 @@
       const dropdownEl = groupEl.closest('.dropdownMenu');
       if (!dropdownEl) return;
 
-      // Download availability is only knowable once the dropdown has been
-      // opened (it's portaled in fresh each time), so mark the trigger
-      // button here rather than up front — same aria-owns correlation
-      // resolveTrackPermalink() uses.
+      // ダウンロード可否は、ドロップダウンが実際に開かれた時点で初めて
+      // 分かる（開くたびに新しくポータルされるため）ので、事前にではなく
+      // ここでトリガーボタンをマークする — resolveTrackPermalink()と
+      // 同じaria-owns相関を使う。
       const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
       if (trigger) {
-        // Record the path too, so highlightDownloadableTriggers() knows
-        // this trigger is already correctly settled for the current track
-        // and won't immediately re-evaluate (and potentially clear) it.
+        // pathも記録しておくことで、highlightDownloadableTriggers()が
+        // このトリガーは現在のトラックについてすでに正しく確定済みだと
+        // 認識し、すぐに再評価して（誤って）クリアしてしまうのを防ぐ。
         trigger.dataset.scDownloadPath = permalinkPath(permalinkFromScope(trigger)) || '';
         markTriggerDownloadable(trigger);
       }
@@ -1333,19 +1336,18 @@
   whenDomReady(() => {
     document.head.appendChild(style);
 
-    // The initial page load's track list (e.g. the first batch of /likes)
-    // is often embedded directly in this hydration payload rather than
-    // fetched via a subsequent AJAX call our fetch patch could observe, so
-    // scan it once up front too. It doesn't update on SPA navigation, but
-    // by then the fetch patch is already catching fresh data as it loads.
+    // 初回ページ読み込み時のトラック一覧（/likesの最初の一括分など）は、
+    // このhydrationデータに直接埋め込まれていて、こちらのfetchパッチで
+    // 監視できる後続のAJAX呼び出しでは取得されないことが多いので、こちら
+    // も一度だけスキャンしておく。SPAナビゲーションでは更新されないが、
+    // その頃にはfetchパッチが読み込み中の新しいデータを既に捕捉している。
     recordDownloadableInfo(window.__sc_hydration);
 
-    // React re-renders wipe out our injected buttons, so keep watching and
-    // reinsert whenever they're gone. Likes/playlist lists are also
-    // lazy-loaded and append new tiles as the user scrolls, so the same
-    // observer keeps those overlay buttons in sync. "More" dropdowns are
-    // portaled in fresh each time they're opened, so this also catches
-    // those as they appear.
+    // Reactの再描画によって挿入したボタンが消えてしまうため、監視を続けて
+    // 消えるたびに再挿入する。likes/プレイリストの一覧も遅延読み込みで
+    // スクロールに応じて新しいタイルが追加されるため、同じobserverで
+    // オーバーレイボタンの整合性を保つ。「More」ドロップダウンも開かれる
+    // たびに新しくポータルされるため、これも同様にここで捕捉する。
     const observer = new MutationObserver(() => {
       insertTileButtons();
       insertDownloadButtons();
