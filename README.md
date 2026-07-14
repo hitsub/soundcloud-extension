@@ -1,4 +1,4 @@
-# SoundCloud Menu Extension
+<img width="756" height="211" alt="image" src="https://github.com/user-attachments/assets/23a1de41-db70-40c3-b173-dd603754585b" /># SoundCloud Menu Extension
 
 主に以下の機能を追加するTampermonkey用のスクリプト。
 - SoundCloud上でジャケット画像のコピー
@@ -19,6 +19,10 @@
 2. [このリンクを開く](https://github.com/hitsub/soundcloud-extension/raw/refs/heads/main/soundcloud-menu-extension.user.js)。
 3. Tampermonkeyが立ち上がるので、インストールする。
    <img width="844" height="425" alt="image" src="https://github.com/user-attachments/assets/a59ac06d-c2f5-4e2c-8938-8851f6bb6baf" />
+4. 拡張機能の詳細ページを開く
+   - [chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo](chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo)
+5. 「ユーザースクリプトを許可する」にチェックを付ける
+<img width="756" height="211" alt="image" src="https://github.com/user-attachments/assets/151e8e8d-8105-4c63-b0a6-168d5092d013" />
 
 
 # 機能
