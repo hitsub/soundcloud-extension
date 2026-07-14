@@ -1,4 +1,4 @@
-<img width="756" height="211" alt="image" src="https://github.com/user-attachments/assets/23a1de41-db70-40c3-b173-dd603754585b" /># SoundCloud Menu Extension
+# SoundCloud Menu Extension
 
 主に以下の機能を追加するTampermonkey用のスクリプト。
 - SoundCloud上でジャケット画像のコピー
