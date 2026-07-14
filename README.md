@@ -5,10 +5,11 @@
 - ダウンロード時にファイルに対してメタ情報を書き込む機能
 
 > [!WARNING]
-> 利用前に必ず読んで同意してください
+> 利用前に必ず読んで同意をしてください
 > - 本スクリプトはSoundCloud, Inc.とは無関係の非公式なツールであり、個人が開発・公開しているものです。
 > - 本スクリプトの一部機能はSoundCloudの非公開API（`api-v2.soundcloud.com`）を直接呼び出しており、利用規約に抵触する可能性があります。**すべて自己責任でご利用ください。**
 > - 本スクリプトは`@grant none`で動作し、直接ページを読み書きします。現在のバージョンはSoundCloud自身のAPIとライブラリ取得用のCDN以外へは何も送信していませんが、Tampermonkeyはインストール元URLを更新チェック先として使うため、更新は今後も自動的に適用されます。Tampermonkeyの設定で「更新前に差分を表示する」オプションを有効にし、更新内容を確認してから適用することを推奨します。
+> - 本リポジトリにおけるコードのうち大半がAI生成によるものです。また、生成した人間はウェブ開発を本業としない人間です。**すべて自己責任でご利用ください。**
 
 # 導入方法
 
@@ -143,6 +144,6 @@ Likesの表示例:
 
 - ログイン済みのSoundCloudを対象とする。
 - 一覧ページのコピーボタンは、サムネイル画像がまだ遅延読み込みされていない場合は失敗表示になる。
-- 「Download file with metadata」は、SoundCloudの非公開API（`api-v2.soundcloud.com`の`/resolve`と`/tracks/{id}/download`）を利用している。ページHTMLを直接`fetch`する方式は、SoundCloudのbot対策（DataDome）によりモバイル版へリダイレクトされCORSでブロックされるため使用していない。認証には`oauth_token`クッキーの値を`Authorization`ヘッダーとして付与している。
+- 「Download file with metadata」は、SoundCloudの非公開API（`api-v2.soundcloud.com`の`/resolve`と`/tracks/{id}/download`）を利用している。認証には`oauth_token`クッキーの値を`Authorization`ヘッダーとして付与している。
 - ダウンロード可否のハイライトは、ページ読み込みの最初期（`@run-at document-start`）に`window.fetch`と`XMLHttpRequest`の両方をラップして実現している。SoundCloud自身のスクリプトが読み込まれる前にこの差し替えを済ませる必要があるための措置（一覧取得の通信が`fetch`ではなく`XMLHttpRequest`経由だったため、両方への対応が必要だった）。
 - MP3のID3v2タグ書き込みでは、タイトル/アルバム/アーティスト/ジャンル/ジャケット以外の既存タグ（例: コメント）は保持されない（`browser-id3-writer`が既存タグを丸ごと消して新規に書き直す仕様のため）。WAV・FLACは対象外のチャンク/ブロックはそのまま保持される。
