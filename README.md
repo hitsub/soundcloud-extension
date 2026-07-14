@@ -5,22 +5,29 @@
 - ダウンロード時にファイルに対してメタ情報を書き込む機能
 
 > [!WARNING]
+> 利用前に必ず読んで同意してください
 > - 本スクリプトはSoundCloud, Inc.とは無関係の非公式なツールであり、個人が開発・公開しているものです。
 > - 本スクリプトの一部機能はSoundCloudの非公開API（`api-v2.soundcloud.com`）を直接呼び出しており、利用規約に抵触する可能性があります。**すべて自己責任でご利用ください。**
-> - 本スクリプトは`@grant none`で動作します。現在のバージョンはSoundCloud自身のAPIとライブラリ取得用のCDN以外へは何も送信していませんが、Tampermonkeyはインストール元URLを更新チェック先として使うため、更新は今後も自動的に適用されます。心配な場合はTampermonkeyの設定で「更新前に差分を表示する」オプションを有効にし、更新内容を確認してから適用することを推奨します。
+> - 本スクリプトは`@grant none`で動作し、直接ページを読み書きします。現在のバージョンはSoundCloud自身のAPIとライブラリ取得用のCDN以外へは何も送信していませんが、Tampermonkeyはインストール元URLを更新チェック先として使うため、更新は今後も自動的に適用されます。Tampermonkeyの設定で「更新前に差分を表示する」オプションを有効にし、更新内容を確認してから適用することを推奨します。
 
 # 導入方法
 
+0. 上記事項を読み同意する。
 1. TampermonkeyをChromeウェブストアからインストールする。
     - https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo
 2. [このリンクを開く](https://github.com/hitsub/soundcloud-extension/raw/refs/heads/main/soundcloud-menu-extension.user.js)。
 3. Tampermonkeyが立ち上がるので、インストールする。
+   <img width="844" height="425" alt="image" src="https://github.com/user-attachments/assets/a59ac06d-c2f5-4e2c-8938-8851f6bb6baf" />
+
 
 # 機能
 
 ## ジャケット画像のコピーボタン
 
-各画面におけるメニューにジャケット画像をコピーするボタンが増えているので、押せばOK。
+各画面におけるメニューにジャケット画像をコピーするボタンが増えているので、押せばOK。  
+FeedやLikes、プレイリストなど各画面に対応。
+
+<img width="604" height="190" alt="image" src="https://github.com/user-attachments/assets/95b00af1-0daf-4f90-8bca-be76238d8853" />
 
 <details>
 <summary> 詳細</summary>
@@ -36,6 +43,15 @@
 
 各楽曲のメニューにおいて「Download file」があるとき、その下の行に「Download file with metadata」が追加されるので、そこから実行することができる。  
 対応形式は wav、mp3、flac の３種類。
+
+<img width="376" height="233" alt="image" src="https://github.com/user-attachments/assets/4d5d0c3e-9b67-468a-9c01-98572123d616" />
+
+ダウンロード後、AudioShellなど対応したソフトで閲覧するとタグ情報が入っていることが確認できる。
+
+<img width="763" height="419" alt="image" src="https://github.com/user-attachments/assets/16ce94fb-55e9-468a-9952-ae6b745b05b9" />
+
+> [Everything feels warmer now / C4T4L1](https://soundcloud.com/c4t4l1/everything-feels-warmer-now)
+
 
 > [!NOTE]
 > WindowsやiTunesなどの一部ソフトはWAVに書き込まれているメタデータの読み取りに対応していないので注意してください。  
@@ -98,6 +114,13 @@ MP3と共通のID3v2タグ生成ロジックを再利用して実装。
 ダウンロードできる楽曲のMoreボタンはオレンジ色で目立つ表示になる。  
 プレイリストやStationにおいては、再生数の左に表示がされる。
 
+Likesの表示例:
+<img width="913" height="498" alt="image" src="https://github.com/user-attachments/assets/50f8c7e9-9037-44db-adb1-413da20bda94" />
+
+プレイリストの表示例:
+<img width="853" height="292" alt="image" src="https://github.com/user-attachments/assets/046e4a9a-2f3c-44ea-9313-bec7ba750617" />
+
+
 <details>
 <summary> 詳細</summary>
 
@@ -112,6 +135,9 @@ MP3と共通のID3v2タグ生成ロジックを再利用して実装。
 
 楽曲に Buy link（カートアイコンの外部リンク）が設定されている場合、そのアイコンの右にリンク先のドメイン名を表示する。  
 `gate.sc`のようなリダイレクト/ゲートサービス経由のリンクは、URLパラメータに含まれる本来の遷移先（例: `hypeddit.com`）を表示する。
+
+<img width="231" height="300" alt="image" src="https://github.com/user-attachments/assets/ef83ba7a-28c2-4cc0-bec1-26401a94a5d7" />
+
 
 ## 動作条件・制限
 
