@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SoundCloud Menu Extension
 // @namespace    https://github.com/hitsub/soundcloud-extension/
-// @version      0.3.1
+// @version      0.3.2
 // @description  トラックのタイル/行/単体ページ、またはMoreメニューからジャケット画像をコピーし、タイトル・アーティスト・アルバム・ジャケット画像タグが未設定のファイルをダウンロード時に自動で埋め込む（WAV/MP3/FLAC）
 // @author       hitsub
 // @match        *://soundcloud.com/*
@@ -1026,7 +1026,13 @@
     if (downloadableByPath.size === 0) return;
     document.querySelectorAll('.sc-button-more').forEach((trigger) => {
       const path = permalinkPath(permalinkFromScope(trigger));
-      if (trigger.dataset.scDownloadPath === path) return; // このトラックについてはすでに評価済み
+      // タイルのDOM挿入（MutationObserverの発火）が、そのトラックのdownloadable情報を運ぶ
+      // APIレスポンスの解決より先に起きることがある。そのときdownloadableByPathにはまだこのpathの
+      // 記録が無いので、ここで「未評価」のまま次回のtickに持ち越す（dataset.scDownloadPathを書き込まない）
+      // — 書き込んでしまうと、直後にデータが届いても同じpathだからと再評価をスキップし、
+      // 「ダウンロード可能なのにMoreを開くまでハイライトが付かない」状態のまま固定されてしまう。
+      if (path && !downloadableByPath.has(path)) return;
+      if (trigger.dataset.scDownloadPath === path) return; // このトラックについては確定済みの値で評価済み
       trigger.dataset.scDownloadPath = path || '';
       if (path && downloadableByPath.get(path)) markTriggerDownloadable(trigger);
       else clearTriggerDownloadableState(trigger);
