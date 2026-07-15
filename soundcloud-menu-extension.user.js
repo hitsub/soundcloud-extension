@@ -1052,9 +1052,11 @@
     // 代わりに再生回数の左に常時表示のインジケーターを出す。
     const row = trigger.closest('.trackItem');
     if (!row || row.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)) return;
-    const playCount = row.querySelector('.trackItem__playCount');
-    if (!playCount) return;
-    playCount.insertAdjacentElement('beforebegin', createInlineDownloadIcon());
+    // 再生数が非公開などの理由で.trackItem__playCount自体が描画されない行もあるため、
+    // その場合はアクションボタン群の直前（行の右端）にフォールバックする。
+    const anchor = row.querySelector('.trackItem__playCount') || row.querySelector('.trackItem__actions');
+    if (!anchor) return;
+    anchor.insertAdjacentElement('beforebegin', createInlineDownloadIcon());
   }
 
   function createInlinePurchaseIcon() {
@@ -1076,7 +1078,12 @@
     // 両方表示される場合はカートアイコンをDLアイコンより左にしたいので、
     // DLアイコンがすでにあればその直前に、無ければ再生回数の直前に挿入する
     // （挿入の呼び出し順に関わらず、この向き付けが常に成り立つ）。
-    const anchor = row.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`) || row.querySelector('.trackItem__playCount');
+    // 再生数が非公開などで.trackItem__playCount自体が無い行は、
+    // アクションボタン群の直前（行の右端）にフォールバックする。
+    const anchor =
+      row.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`) ||
+      row.querySelector('.trackItem__playCount') ||
+      row.querySelector('.trackItem__actions');
     if (!anchor) return;
     anchor.insertAdjacentElement('beforebegin', createInlinePurchaseIcon());
   }
