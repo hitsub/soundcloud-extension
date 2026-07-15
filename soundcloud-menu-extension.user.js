@@ -359,17 +359,29 @@
     return response;
   }
 
-  async function copyArtworkFromBaseUrl(baseUrl) {
+  async function resolveArtworkBlob(baseUrl) {
     const response = await fetchArtworkResponse(baseUrl);
     let blob = await response.blob();
     // クリップボードへの書き込みが保証されるのはimage/pngのみ。
     // 一部のジャケット画像（特に"-original"の高解像度版が無いもの）はimage/jpegで配信されており、
     // ブラウザによっては書き込みを拒否する。
     if (blob.type !== 'image/png') blob = await convertBlobToPng(blob);
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    return blob;
   }
 
-  async function copyArtwork() {
+  async function copyArtworkFromBaseUrl(baseUrl) {
+    // navigator.clipboard.write()は「呼び出した瞬間にドキュメントが
+    // フォーカスされていること」を要求する。ClipboardItemにはBlobの
+    // 代わりにPromiseを渡せる仕様になっているため、実際のfetch/PNG変換は
+    // 後回しにしつつ、.write()自体はここで（awaitを挟まず）同期的に呼ぶ
+    // ことで、その後fetch中にウィンドウのフォーカスが外れても書き込みは
+    // 成功する。
+    return navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': resolveArtworkBlob(baseUrl) }),
+    ]);
+  }
+
+  async function resolveHeroArtworkBlob() {
     // ページ自身のHTMLをfetch()してmetaタグを読む方式ではなく、
     // ダウンロード機能と同じapi-v2の/resolve呼び出しを経由する。
     // そのHTML fetchこそが断続的にm.soundcloud.comへリダイレクトされCORSでブロックされていたもの（SoundCloudのbot対策）。
@@ -381,7 +393,17 @@
       throw err;
     }
     if (!trackData.artworkUrl) failWith('NO_ARTWORK');
-    await copyArtworkFromBaseUrl(trackData.artworkUrl);
+    return resolveArtworkBlob(trackData.artworkUrl);
+  }
+
+  async function copyArtwork() {
+    // トラック単体ページでは画像URLを知るためにapi-v2への非同期呼び出し
+    // （resolveHeroArtworkBlob内のfetchTrackData）が必要になるが、それも
+    // 丸ごとPromiseとしてClipboardItemに渡し、.write()自体はここで同期的に
+    // 呼ぶ（copyArtworkFromBaseUrlと同じ理由）。
+    return navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': resolveHeroArtworkBlob() }),
+    ]);
   }
 
   function getArtworkUrlFromTile(artworkEl) {
@@ -396,7 +418,10 @@
   async function copyArtworkFromTile(artworkEl) {
     const baseUrl = getArtworkUrlFromTile(artworkEl);
     if (!baseUrl) failWith('ARTWORK_NOT_LOADED');
-    await copyArtworkFromBaseUrl(baseUrl);
+    // await ではなく return: copyArtworkFromBaseUrl 内の
+    // navigator.clipboard.write() 呼び出しが、この関数の呼び出しから
+    // 一切 await を挟まず同期的に実行されることが重要なため。
+    return copyArtworkFromBaseUrl(baseUrl);
   }
 
   function concatBytes(arrays) {
