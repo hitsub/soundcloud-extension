@@ -36,3 +36,6 @@ under its own license (not the MIT license above):
   before being imported (see loadId3Writer() in
   soundcloud-menu-extension.user.js). Licensed under the MIT License. See
   https://github.com/egoroof/browser-id3-writer for source and license text.
+- Feather Icons "shopping-cart" icon, embedded directly in
+  soundcloud-menu-extension.user.js. Licensed under the MIT License. See
+  https://github.com/feathericons/feather for source and license text.

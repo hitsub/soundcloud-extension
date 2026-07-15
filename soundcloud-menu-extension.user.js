@@ -13,6 +13,7 @@
   'use strict';
 
   const downloadableByPath = new Map();
+  const purchaseUrlByPath = new Map();
 
   function permalinkPath(url) {
     try {
@@ -33,12 +34,24 @@
       value.forEach((item) => recordDownloadableInfo(item, depth + 1));
       return;
     }
-    if (typeof value.permalink_url === 'string' && typeof value.downloadable === 'boolean') {
+    if (typeof value.permalink_url === 'string') {
       const path = permalinkPath(value.permalink_url);
-      // downloadableはトラックのダウンロード数上限（download_count）
-      // を使い切った後もtrueのままになりうる —
-      // 実際にネイティブの「Download file」項目が出るかどうかはhas_downloads_leftで決まる。
-      if (path) downloadableByPath.set(path, value.downloadable && value.has_downloads_left !== false);
+      if (path) {
+        // downloadableを持たないオブジェクト（purchase_urlだけ乗っている
+        // プレイリストのトラック要約など）もあるため、downloadableの記録と
+        // purchase_urlの記録は互いに独立させる — 片方が条件付きだからと
+        // いって、もう片方まで一緒にスキップしてはいけない。
+        if (typeof value.downloadable === 'boolean') {
+          // downloadableはトラックのダウンロード数上限（download_count）
+          // を使い切った後もtrueのままになりうる —
+          // 実際にネイティブの「Download file」項目が出るかどうかはhas_downloads_leftで決まる。
+          downloadableByPath.set(path, value.downloadable && value.has_downloads_left !== false);
+        }
+        // purchase_urlはプレイリストのリストビューではSoundCloud自身が
+        // カートアイコンを描画しないため、DOMからは取得できない。
+        // ただしこの同じレスポンスJSONには乗っているので、ここで一緒に拾う。
+        if (value.purchase_url) purchaseUrlByPath.set(path, value.purchase_url);
+      }
     }
     for (const key of Object.keys(value)) {
       recordDownloadableInfo(value[key], depth + 1);
@@ -115,7 +128,14 @@
   // グリッド（Badges）タイルのMoreボタンはジャケット画像の真上に乗るため（コピー用ボタンと同様に）、
   // 他の箇所で使うアウトラインではなく従来のアイコン色変更の方式を維持する。
   const MORE_BUTTON_ICON_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasDownloadIcon';
+  // BuyLinkのみ（ダウンロード不可）の場合の白いハイライト。ダウンロード可能
+  // でもある場合は、上のオレンジ系クラスが優先され、こちらは付与されない。
+  // Playlist/Station（.trackItem）のMoreボタンにしか付かないため、グリッド
+  // タイル用のアイコン色変更バリアントは不要（アウトラインのみで足りる）。
+  const MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasPurchaseLink';
   const INLINE_DOWNLOAD_ICON_CLASS = 'scArtworkCopy__inlineDownloadIcon';
+  const INLINE_PURCHASE_ICON_CLASS = 'scArtworkCopy__inlinePurchaseIcon';
+  const BUY_LINK_BUTTON_CLASS = 'scArtworkCopy__buyLinkButton';
   const PURCHASE_LINK_WRAPPER_CLASS = 'scArtworkCopy__purchaseLinkWrapper';
   const PURCHASE_LINK_DOMAIN_CLASS = 'scArtworkCopy__purchaseLinkDomain';
   const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
@@ -134,6 +154,8 @@
   const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7ZM5 18v2h14v-2H5Z"/></svg>';
   // Font Awesome Free 6.7.2の「clipboard」（塗りつぶし）アイコン — CC BY 4.0。
   const ICON_CLIPBOARD_SOLID = '<svg viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M192 0c-41.8 0-77.4 26.7-90.5 64L64 64C28.7 64 0 92.7 0 128L0 448c0 35.3 28.7 64 64 64l256 0c35.3 0 64-28.7 64-64l0-320c0-35.3-28.7-64-64-64l-37.5 0C269.4 26.7 233.8 0 192 0zm0 64a32 32 0 1 1 0 64 32 32 0 1 1 0-64zM112 192l160 0c8.8 0 16 7.2 16 16s-7.2 16-16 16l-160 0c-8.8 0-16-7.2-16-16s7.2-16 16-16z"/></svg>';
+  // Feather Icons「shopping-cart」— MIT License。
+  const ICON_CART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>';
 
   const style = document.createElement('style');
   style.textContent = `
@@ -143,6 +165,21 @@
     .${DOWNLOAD_BUTTON_CLASS} .sc-button-label {
       color: #ff5500 !important;
       fill: #ff5500 !important;
+    }
+    /* BuyLinkはアイコンだけオレンジにし、ラベルはネイティブの色のまま
+       残す — 両方オレンジだと目立ちすぎ、逆に無色だと既存メニューに
+       埋もれてしまうため。 */
+    .${BUY_LINK_BUTTON_CLASS} svg,
+    .${BUY_LINK_BUTTON_CLASS} svg * {
+      color: #ff5500 !important;
+      fill: #ff5500 !important;
+    }
+    /* カートアイコン（Feather Icons）は同じ24x24のviewBoxでも図形が
+       枠いっぱいに描かれているため、ネイティブサイズのままだと
+       「Download file with metadata」のアイコンより大きく見える。 */
+    .${BUY_LINK_BUTTON_CLASS} svg {
+      width: 16px;
+      height: 16px;
     }
     .${MORE_BUTTON_HIGHLIGHT_CLASS} {
       /* マイナスのoffsetでアウトラインをボタンの内側に描く（外側にはみ出すbox-shadow/outlineは、
@@ -156,23 +193,39 @@
       color: #ff5500 !important;
       fill: #ff5500 !important;
     }
+    /* 固定の白だとLightモードで背景に溶けて見えなくなるため、
+       曲タイトルなどと同じテーマ追従のテキスト色を使う。 */
+    .${MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS} {
+      outline: 2px solid var(--primary-color, #fff) !important;
+      outline-offset: -2px;
+    }
     /* 上で強制しているcolor/fillがネイティブボタン自身の:hoverフェードを妨げてしまうため、
        隣のボタン（Like/Follow/Moreなど）と挙動を揃えるために同じフェードを明示的に再定義する。 */
     .${DOWNLOAD_BUTTON_CLASS}:hover,
+    .${BUY_LINK_BUTTON_CLASS}:hover,
     .${MORE_BUTTON_ICON_HIGHLIGHT_CLASS}:hover {
       opacity: 0.7 !important;
     }
-    .${INLINE_DOWNLOAD_ICON_CLASS} {
+    .${INLINE_DOWNLOAD_ICON_CLASS},
+    .${INLINE_PURCHASE_ICON_CLASS} {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       width: 20px;
       height: 20px;
       margin-right: 4px;
-      color: #ff5500;
       vertical-align: middle;
     }
-    .${INLINE_DOWNLOAD_ICON_CLASS} svg {
+    .${INLINE_DOWNLOAD_ICON_CLASS} {
+      color: #ff5500;
+    }
+    .${INLINE_PURCHASE_ICON_CLASS} {
+      /* 固定の白だとLightモードで背景に溶けて見えなくなるため、
+         曲タイトルなどと同じテーマ追従のテキスト色を使う。 */
+      color: var(--primary-color, #fff);
+    }
+    .${INLINE_DOWNLOAD_ICON_CLASS} svg,
+    .${INLINE_PURCHASE_ICON_CLASS} svg {
       width: 16px;
       height: 16px;
     }
@@ -180,7 +233,9 @@
        見た目もクリックも競合してしまうため、対抗せずに表示中はこのアイコンを隠す。
        同じオーバーレイは再生中の行（"active"クラスが付く）でもホバーなしで表示され続ける。 */
     .trackItem:hover .${INLINE_DOWNLOAD_ICON_CLASS},
-    .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS} {
+    .trackItem.active .${INLINE_DOWNLOAD_ICON_CLASS},
+    .trackItem:hover .${INLINE_PURCHASE_ICON_CLASS},
+    .trackItem.active .${INLINE_PURCHASE_ICON_CLASS} {
       display: none;
     }
     /* .purchaseLink__container自体には一切スタイルを当てない
@@ -1002,12 +1057,55 @@
     playCount.insertAdjacentElement('beforebegin', createInlineDownloadIcon());
   }
 
+  function createInlinePurchaseIcon() {
+    // ダウンロードの目印（createInlineDownloadIcon）と同じ理由でボタンにはしない。
+    // 実際にBuyLinkを開くのはMoreメニューの「Open BuyLink」からのみ。
+    const icon = document.createElement('span');
+    icon.className = INLINE_PURCHASE_ICON_CLASS;
+    icon.title = 'BuyLink';
+    icon.setAttribute('aria-label', 'BuyLink');
+    icon.innerHTML = ICON_CART;
+    return icon;
+  }
+
+  function insertInlinePlaylistPurchaseIcon(trigger) {
+    // insertInlinePlaylistDownloadIcon と同じ理由（プレイリストの行は密集していて見つけにくい）。
+    // ダウンロード可否とは独立に、BuyLinkがあれば常に出す。
+    const row = trigger.closest('.trackItem');
+    if (!row || row.querySelector(`.${INLINE_PURCHASE_ICON_CLASS}`)) return;
+    // 両方表示される場合はカートアイコンをDLアイコンより左にしたいので、
+    // DLアイコンがすでにあればその直前に、無ければ再生回数の直前に挿入する
+    // （挿入の呼び出し順に関わらず、この向き付けが常に成り立つ）。
+    const anchor = row.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`) || row.querySelector('.trackItem__playCount');
+    if (!anchor) return;
+    anchor.insertAdjacentElement('beforebegin', createInlinePurchaseIcon());
+  }
+
   function markTriggerDownloadable(trigger) {
     // グリッドタイルのMoreボタンはジャケット画像の上に乗っているため、
     // 他の箇所で使うアウトラインではなくアイコン色変更の方式を維持する。
     const isGridTile = !!trigger.closest('.playableTile__actionWrapper');
+    // ダウンロード可能かつBuyLinkもある場合は、オレンジ（ダウンロード）を
+    // 優先する — 白いBuyLink用ハイライトが先に付いていたら外す。
+    trigger.classList.remove(MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS);
     trigger.classList.add(isGridTile ? MORE_BUTTON_ICON_HIGHLIGHT_CLASS : MORE_BUTTON_HIGHLIGHT_CLASS);
     insertInlinePlaylistDownloadIcon(trigger);
+  }
+
+  function markTriggerHasPurchaseLink(trigger) {
+    // 「Open BuyLink」メニュー項目と同じ理由で、Moreボタンの白いアウトラインも
+    // Playlist/Station（.trackItem）に限定する — それ以外の文脈では
+    // ネイティブの購入リンク（カートアイコン）がすでにアクション行に
+    // 表示されているため。
+    const isPlaylistOrStation = !!trigger.closest('.trackItem');
+    // ダウンロード可能としてすでにオレンジでマーク済みなら、そちらを優先し
+    // Moreボタンの色は変えない（インジケーターアイコンの表示は独立に行う）。
+    const alreadyDownloadHighlighted =
+      trigger.classList.contains(MORE_BUTTON_HIGHLIGHT_CLASS) || trigger.classList.contains(MORE_BUTTON_ICON_HIGHLIGHT_CLASS);
+    if (isPlaylistOrStation && !alreadyDownloadHighlighted) {
+      trigger.classList.add(MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS);
+    }
+    insertInlinePlaylistPurchaseIcon(trigger);
   }
 
   function clearTriggerDownloadableState(trigger) {
@@ -1015,27 +1113,32 @@
     // あるトラック単体ページから別のトラック単体ページへ直接遷移する場合）。
     // そのため、この要素が以前どのトラックのためにマークされていたとしても、
     // 永久に信用せず、再評価の前にハイライトを消しておく必要がある。
-    trigger.classList.remove(MORE_BUTTON_HIGHLIGHT_CLASS, MORE_BUTTON_ICON_HIGHLIGHT_CLASS);
-    trigger.closest('.trackItem')?.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)?.remove();
+    trigger.classList.remove(MORE_BUTTON_HIGHLIGHT_CLASS, MORE_BUTTON_ICON_HIGHLIGHT_CLASS, MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS);
+    const row = trigger.closest('.trackItem');
+    row?.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)?.remove();
+    row?.querySelector(`.${INLINE_PURCHASE_ICON_CLASS}`)?.remove();
   }
 
   function highlightDownloadableTriggers() {
     // insertDownloadButtons()の「開いてからハイライトする」フォールバックを補完するもの:
     // 「More」ボタンが一度も開かれていなくても、
-    // 横読みで集めたデータがダウンロード可能だと示した時点で発火する。
-    if (downloadableByPath.size === 0) return;
+    // 横読みで集めたデータがダウンロード可能・BuyLinkありだと示した時点で発火する。
+    if (downloadableByPath.size === 0 && purchaseUrlByPath.size === 0) return;
     document.querySelectorAll('.sc-button-more').forEach((trigger) => {
       const path = permalinkPath(permalinkFromScope(trigger));
-      // タイルのDOM挿入（MutationObserverの発火）が、そのトラックのdownloadable情報を運ぶ
-      // APIレスポンスの解決より先に起きることがある。そのときdownloadableByPathにはまだこのpathの
-      // 記録が無いので、ここで「未評価」のまま次回のtickに持ち越す（dataset.scDownloadPathを書き込まない）
+      // タイルのDOM挿入（MutationObserverの発火）が、そのトラックのdownloadable/purchase_url情報を
+      // 運ぶAPIレスポンスの解決より先に起きることがある。そのときどちらのMapにもこのpathの記録が
+      // まだ無いので、ここで「未評価」のまま次回のtickに持ち越す（dataset.scDownloadPathを書き込まない）
       // — 書き込んでしまうと、直後にデータが届いても同じpathだからと再評価をスキップし、
-      // 「ダウンロード可能なのにMoreを開くまでハイライトが付かない」状態のまま固定されてしまう。
-      if (path && !downloadableByPath.has(path)) return;
+      // 「ダウンロード可能/BuyLinkありなのにMoreを開くまでハイライトが付かない」状態のまま固定されてしまう。
+      if (path && !downloadableByPath.has(path) && !purchaseUrlByPath.has(path)) return;
       if (trigger.dataset.scDownloadPath === path) return; // このトラックについては確定済みの値で評価済み
       trigger.dataset.scDownloadPath = path || '';
-      if (path && downloadableByPath.get(path)) markTriggerDownloadable(trigger);
-      else clearTriggerDownloadableState(trigger);
+      clearTriggerDownloadableState(trigger);
+      const isDownloadable = path && downloadableByPath.get(path);
+      const purchaseUrl = path && purchaseUrlByPath.get(path);
+      if (isDownloadable) markTriggerDownloadable(trigger);
+      if (purchaseUrl) markTriggerHasPurchaseLink(trigger);
     });
   }
 
@@ -1397,6 +1500,54 @@
     });
   }
 
+  function createBuyLinkButton(purchaseUrl) {
+    const domain = extractLinkDomain(purchaseUrl) || purchaseUrl;
+    const label = `Open BuyLink (${domain})`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `sc-button-secondary sc-button moreActions__button sc-button-medium sc-button-tertiary ${BUY_LINK_BUTTON_CLASS}`;
+    button.title = label;
+    button.setAttribute('aria-label', label);
+
+    const iconWrapper = document.createElement('div');
+    iconWrapper.innerHTML = ICON_CART;
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'sc-button-label';
+    labelEl.textContent = label;
+
+    button.append(iconWrapper, labelEl);
+    // ダウンロードのような読み込み中/成功/失敗の状態遷移が要らない、
+    // その場で完結する単純な操作なのでattachCopyHandlerは使わない。
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      window.open(purchaseUrl, '_blank', 'noopener');
+    });
+    return button;
+  }
+
+  function insertBuyLinkButtons() {
+    // ダウンロード可否と違い、開かなくてもすでにpurchase_urlが分かって
+    // いれば追加できるので、ネイティブの何かの存在チェックは不要。
+    if (purchaseUrlByPath.size === 0) return;
+    document.querySelectorAll('.moreActions__group').forEach((groupEl) => {
+      if (groupEl.querySelector(`.${BUY_LINK_BUTTON_CLASS}`)) return;
+      const dropdownEl = groupEl.closest('.dropdownMenu');
+      if (!dropdownEl) return;
+      // Playlist/Stationの行（.trackItem）以外では、ネイティブの購入リンク
+      // （カートアイコン、insertPurchaseLinkDomains()がドメインを添えている）
+      // がすでにアクション行に見えているはずなので、Moreメニューへの追加は
+      // この2つの文脈に限定する。
+      const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
+      if (!trigger?.closest('.trackItem')) return;
+      const path = permalinkPath(resolveTrackPermalink(dropdownEl));
+      const purchaseUrl = path && purchaseUrlByPath.get(path);
+      if (!purchaseUrl) return;
+      groupEl.appendChild(createBuyLinkButton(purchaseUrl));
+    });
+  }
+
   whenDomReady(() => {
     document.head.appendChild(style);
 
@@ -1415,11 +1566,13 @@
       insertDownloadButtons();
       highlightDownloadableTriggers();
       insertPurchaseLinkDomains();
+      insertBuyLinkButtons();
     });
     observer.observe(document.body, { childList: true, subtree: true });
     insertTileButtons();
     insertDownloadButtons();
     highlightDownloadableTriggers();
     insertPurchaseLinkDomains();
+    insertBuyLinkButtons();
   });
 })();
