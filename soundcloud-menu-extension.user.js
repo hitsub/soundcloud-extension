@@ -314,7 +314,9 @@
       vertical-align: middle;
     }
     .${PURCHASE_LINK_DOMAIN_CLASS} {
-      margin-left: 4px;
+      /* カートアイコン自体（ネイティブのsc-button-tertiary）の内側paddingの分だけ
+         見た目の余白が大きくなるため、マイナスマージンで詰める。 */
+      margin-left: -8px;
       font-size: 11px;
       color: var(--secondary-text-color, #999) !important;
       white-space: nowrap;
