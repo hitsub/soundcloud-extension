@@ -14,6 +14,7 @@
 
   const downloadableByPath = new Map();
   const purchaseUrlByPath = new Map();
+  const descriptionByPath = new Map();
 
   function permalinkPath(url) {
     try {
@@ -51,6 +52,12 @@
         // カートアイコンを描画しないため、DOMからは取得できない。
         // ただしこの同じレスポンスJSONには乗っているので、ここで一緒に拾う。
         if (value.purchase_url) purchaseUrlByPath.set(path, value.purchase_url);
+        // descriptionは初回表示分（window.__sc_hydration）の軽量なトラック要約には
+        // 乗っておらず、スクロールで追加読み込みされるapi-v2レスポンスにのみ含まれる
+        // ことを確認済み（初回表示分では拾えない）。
+        if (typeof value.description === 'string' && value.description.trim()) {
+          descriptionByPath.set(path, value.description);
+        }
       }
     }
     for (const key of Object.keys(value)) {
@@ -149,6 +156,25 @@
   const BUY_LINK_BUTTON_CLASS = 'scArtworkCopy__buyLinkButton';
   const PURCHASE_LINK_WRAPPER_CLASS = 'scArtworkCopy__purchaseLinkWrapper';
   const PURCHASE_LINK_DOMAIN_CLASS = 'scArtworkCopy__purchaseLinkDomain';
+  const DESCRIPTION_LINK_WRAPPER_CLASS = 'scArtworkCopy__descriptionLinkWrapper';
+  const DESCRIPTION_LINK_BUTTON_CLASS = 'scArtworkCopy__descriptionLinkButton';
+  const DESCRIPTION_LINK_MORE_CLASS = 'scArtworkCopy__descriptionLinkMore';
+  // 行の残り幅に実際に収まるかまでは判定せず、シンプルな固定件数で「and N more」に折りたたむ。
+  const MAX_VISIBLE_DESCRIPTION_LINKS = 3;
+  // SNS/SoundCloud自身へのリンクはほぼ全トラックの説明文に定型文として入っており、
+  // 個別のリンクとして目立たせる価値が薄いため除外する。
+  const DESCRIPTION_LINK_EXCLUDED_DOMAINS = new Set([
+    'x.com',
+    'soundcloud.com',
+    'on.soundcloud.com',
+    'instagram.com',
+    'facebook.com',
+    'youtube.com',
+    'youtu.be',
+    'discord.com',
+    'ffm.bio',
+    'tiktok.com',
+  ]);
   const TOAST_CONTAINER_ID = 'scArtworkCopy__toastContainer';
   const TOAST_CLASS = 'scArtworkCopy__toast';
   const TOAST_VISIBLE_CLASS = 'scArtworkCopy__toast--visible';
@@ -276,15 +302,44 @@
        また同コンテナにoverflow:hiddenが掛かっているらしく、position:absoluteで外側にはみ出す構成だと
        バッジ自体が見えなくなってしまった）。
        代わりに、コンテナとバッジを両方くるむ新しいラッパー要素（insertPurchaseLinkDomains()が生成）側でflexにする。
-       align-selfは、外側の行がbaseline基準の縦揺れを持っていた場合でも、
-       他のアクションアイコンと縦位置を揃えるための保険。 */
+       align-self（外側がflexの場合）とvertical-align（inline/baselineの場合）の両方を保険として指定し、
+       外側の行の揃え方に関わらず他のアクションアイコンと縦位置を揃える。 */
     .${PURCHASE_LINK_WRAPPER_CLASS} {
       display: inline-flex !important;
       align-items: center !important;
       align-self: center !important;
+      vertical-align: middle;
     }
     .${PURCHASE_LINK_DOMAIN_CLASS} {
       margin-left: 4px;
+      font-size: 11px;
+      color: var(--secondary-text-color, #999) !important;
+      white-space: nowrap;
+    }
+    /* 挿入先（.sc-button-groupの直後、または購入リンクの隣）がflexコンテナとは
+       限らないため、align-self（flexの場合）とvertical-align（inline/baselineの
+       場合）の両方を保険として指定し、どちらのレイアウトでも縦中央に揃える。 */
+    .${DESCRIPTION_LINK_WRAPPER_CLASS} {
+      display: inline-flex !important;
+      align-items: center !important;
+      align-self: center !important;
+      vertical-align: middle;
+      gap: 6px;
+      margin-left: 6px;
+    }
+    /* ネイティブのタグ（ジャンル/曲名下のハッシュタグ）と同じクラスを流用し、
+       見た目・テーマ追従を独自に再現しない。フォントサイズだけこちらの11pxに揃える。 */
+    .${DESCRIPTION_LINK_BUTTON_CLASS},
+    .${DESCRIPTION_LINK_BUTTON_CLASS} .sc-tagContent {
+      font-size: 11px !important;
+    }
+    /* ネイティブのハッシュタグは.sc-tagContentの前に"#"を疑似要素で付けているが、
+       URLのドメイン表示には不要なため打ち消す。 */
+    .${DESCRIPTION_LINK_BUTTON_CLASS}::before,
+    .${DESCRIPTION_LINK_BUTTON_CLASS} .sc-tagContent::before {
+      content: none !important;
+    }
+    .${DESCRIPTION_LINK_MORE_CLASS} {
       font-size: 11px;
       color: var(--secondary-text-color, #999) !important;
       white-space: nowrap;
@@ -1524,6 +1579,14 @@
     return button;
   }
 
+  function normalizeDisplayDomain(hostname) {
+    const stripped = hostname.replace(/^www\./, '');
+    // open.spotify.comはただの"Spotify"の意味しか持たないサブドメインなので、
+    // www.の除去と同じ理由でspotify.comとして表示する。
+    if (stripped === 'open.spotify.com') return 'spotify.com';
+    return stripped;
+  }
+
   function extractLinkDomain(href) {
     try {
       const url = new URL(href, location.origin);
@@ -1533,12 +1596,12 @@
       const wrapped = url.searchParams.get('url');
       if (wrapped) {
         try {
-          return new URL(wrapped).hostname.replace(/^www\./, '');
+          return normalizeDisplayDomain(new URL(wrapped).hostname);
         } catch {
           // wrappedの値が有効な絶対URLではなかった場合はそのまま続行する。
         }
       }
-      return url.hostname.replace(/^www\./, '');
+      return normalizeDisplayDomain(url.hostname);
     } catch {
       return null;
     }
@@ -1566,6 +1629,98 @@
       badge.className = PURCHASE_LINK_DOMAIN_CLASS;
       badge.textContent = domain;
       wrapper.appendChild(badge);
+    });
+  }
+
+  function extractUrlsFromText(text) {
+    const matches = text.match(/https?:\/\/[^\s<>()"'　]+/g) || [];
+    // 説明文中でURLの直後に来がちな句読点・閉じ括弧を取り除く。
+    return matches.map((url) => url.replace(/[),.!?、。」』]+$/, ''));
+  }
+
+  function createDescriptionLinkButton(url) {
+    const domain = extractLinkDomain(url) || url;
+    // ネイティブのタグ（ジャンル/曲名下のハッシュタグ）と同じクラスを流用し、
+    // 見た目・テーマ追従を独自に再現しない。
+    const link = document.createElement('a');
+    link.className = `sc-tag sc-tag-small ${DESCRIPTION_LINK_BUTTON_CLASS}`;
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = url;
+
+    const label = document.createElement('span');
+    label.className = 'sc-truncate sc-tagContent';
+    label.textContent = domain;
+    link.appendChild(label);
+
+    // 行自体がクリックで再生を始めてしまうため、リンク自身の遷移は妨げず伝播だけ止める。
+    link.addEventListener('click', (event) => event.stopPropagation());
+    return link;
+  }
+
+  function isLikesPage() {
+    // /you/likes、/{username}/likesのどちらも対象。
+    return /^\/[^/]+\/likes\/?$/.test(location.pathname);
+  }
+
+  function insertDescriptionLinkButtons() {
+    // 「List」表示のDOM自体はFeedや各ユーザープロフィールとも共通だが、
+    // それらは横幅が狭くこのボタンを表示する余白が無いため、Likes画面限定にする
+    // （他の機能はすべてDOMの形だけで判定しているが、これだけは例外的にURLも見る）。
+    if (!isLikesPage()) return;
+    if (descriptionByPath.size === 0) return;
+    document.querySelectorAll('.soundActions .sc-button-group').forEach((groupEl) => {
+      if (groupEl.closest('.trackItem')) return;
+      const moreButton = groupEl.querySelector('.sc-button-more');
+      if (!moreButton) return;
+      const row = groupEl.closest('.soundActions') || groupEl;
+
+      let wrapper = row.querySelector(`.${DESCRIPTION_LINK_WRAPPER_CLASS}`);
+      if (!wrapper) {
+        const path = permalinkPath(permalinkFromScope(moreButton));
+        const description = path && descriptionByPath.get(path);
+        const purchaseUrl = path && purchaseUrlByPath.get(path);
+        const normalizedPurchaseUrl = purchaseUrl ? purchaseUrl.replace(/\/$/, '') : null;
+        const urls = description
+          ? extractUrlsFromText(description).filter((url) => {
+              // SNS/SoundCloud自身へのリンクは目立たせる価値が薄いため除外する。
+              const domain = extractLinkDomain(url);
+              if (domain && DESCRIPTION_LINK_EXCLUDED_DOMAINS.has(domain)) return false;
+              // すでにBuyLinkとして表示されているリンクは重複するので除外する。
+              if (normalizedPurchaseUrl && url.replace(/\/$/, '') === normalizedPurchaseUrl) return false;
+              return true;
+            })
+          : [];
+        if (urls.length === 0) return;
+
+        wrapper = document.createElement('span');
+        wrapper.className = DESCRIPTION_LINK_WRAPPER_CLASS;
+        urls.slice(0, MAX_VISIBLE_DESCRIPTION_LINKS).forEach((url) => {
+          wrapper.appendChild(createDescriptionLinkButton(url));
+        });
+        const hiddenCount = urls.length - MAX_VISIBLE_DESCRIPTION_LINKS;
+        if (hiddenCount > 0) {
+          const more = document.createElement('span');
+          more.className = DESCRIPTION_LINK_MORE_CLASS;
+          more.textContent = `and ${hiddenCount} more`;
+          wrapper.appendChild(more);
+        }
+      }
+
+      // .purchaseLink__container（BuyLinkが無いトラックでも空のまま常に存在する）を
+      // くるむ外側の<div>に入れる。.sc-button-group内（Moreの直後）に置くと、
+      // そちらは縦方向の揃え方が違うらしく上揃えになってしまうことがあるため、
+      // BuyLinkの有無に関わらずこちらのコンテナに統一する。
+      const outerContainer = row.querySelector('.purchaseLink__container')?.parentElement ?? null;
+      if (outerContainer) {
+        if (wrapper !== outerContainer.lastElementChild) {
+          outerContainer.appendChild(wrapper);
+        }
+      } else if (wrapper.previousElementSibling !== moreButton) {
+        // 購入リンク用のコンテナ自体が無い行に対するフォールバック。
+        moreButton.insertAdjacentElement('afterend', wrapper);
+      }
     });
   }
 
@@ -1662,6 +1817,7 @@
       highlightDownloadableTriggers();
       insertPurchaseLinkDomains();
       insertBuyLinkButtons();
+      insertDescriptionLinkButtons();
     });
     observer.observe(document.body, { childList: true, subtree: true });
     insertTileButtons();
@@ -1669,5 +1825,6 @@
     highlightDownloadableTriggers();
     insertPurchaseLinkDomains();
     insertBuyLinkButtons();
+    insertDescriptionLinkButtons();
   });
 })();
