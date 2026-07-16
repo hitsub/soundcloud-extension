@@ -162,8 +162,9 @@
   const DESCRIPTION_LINK_WRAPPER_CLASS = 'scArtworkCopy__descriptionLinkWrapper';
   const DESCRIPTION_LINK_BUTTON_CLASS = 'scArtworkCopy__descriptionLinkButton';
   const DESCRIPTION_LINK_MORE_CLASS = 'scArtworkCopy__descriptionLinkMore';
-  // 行の残り幅に実際に収まるかまでは判定せず、シンプルな固定件数で「and N more」に折りたたむ。
+  // 再生数などの隣接表示までの余白を実測できない文脈でのみ使うフォールバックの固定件数。
   const MAX_VISIBLE_DESCRIPTION_LINKS = 3;
+  const DESCRIPTION_LINK_SAFETY_MARGIN_PX = 8;
   // SNS/SoundCloud自身へのリンクはほぼ全トラックの説明文に定型文として入っており、
   // 個別のリンクとして目立たせる価値が薄いため除外する。
   const DESCRIPTION_LINK_EXCLUDED_DOMAINS = new Set([
@@ -1708,6 +1709,7 @@
       const row = groupEl.closest('.soundActions') || groupEl;
 
       let wrapper = row.querySelector(`.${DESCRIPTION_LINK_WRAPPER_CLASS}`);
+      const isNewWrapper = !wrapper;
       if (!wrapper) {
         const path = permalinkPath(permalinkFromScope(moreButton));
         const description = path && descriptionByPath.get(path);
@@ -1725,18 +1727,12 @@
           : [];
         if (urls.length === 0) return;
 
+        // 全件をここに保持しておく — fitDescriptionLinksToAvailableWidth()が
+        // 実測のたびにここから作り直せるようにするため（一度切り詰めると元に戻せないと、
+        // 初回の実測が早すぎて不正確だった場合に永久にズレたままになってしまう）。
         wrapper = document.createElement('span');
         wrapper.className = DESCRIPTION_LINK_WRAPPER_CLASS;
-        urls.slice(0, MAX_VISIBLE_DESCRIPTION_LINKS).forEach((url) => {
-          wrapper.appendChild(createDescriptionLinkButton(url));
-        });
-        const hiddenCount = urls.length - MAX_VISIBLE_DESCRIPTION_LINKS;
-        if (hiddenCount > 0) {
-          const more = document.createElement('span');
-          more.className = DESCRIPTION_LINK_MORE_CLASS;
-          more.textContent = `and ${hiddenCount} more`;
-          wrapper.appendChild(more);
-        }
+        wrapper._scDescriptionUrls = urls;
       }
 
       // .purchaseLink__container（BuyLinkが無いトラックでも空のまま常に存在する）を
@@ -1752,7 +1748,72 @@
         // 購入リンク用のコンテナ自体が無い行に対するフォールバック。
         moreButton.insertAdjacentElement('afterend', wrapper);
       }
+
+      if (isNewWrapper) {
+        fitDescriptionLinksToAvailableWidth(wrapper);
+      } else {
+        // 初回の実測タイミングでは再生数エリアがまだ最終的な表示状態になっておらず、
+        // 判定が食い違ったまま固定されてしまうことがある。安いチェック（実際に今も
+        // 被っているか）だけ毎回行い、被っていれば保持しておいた全URLから作り直して
+        // 自己修正する。
+        const footer = wrapper.closest('.sound__footer');
+        const statsEl = footer?.querySelector('.sound__footerRight');
+        if (
+          statsEl &&
+          wrapper.getBoundingClientRect().right + DESCRIPTION_LINK_SAFETY_MARGIN_PX > statsEl.getBoundingClientRect().left
+        ) {
+          fitDescriptionLinksToAvailableWidth(wrapper);
+        }
+      }
     });
+  }
+
+  function fitDescriptionLinksToAvailableWidth(wrapper) {
+    // 行によって再生数などまでの余白は異なるため、固定件数ではなく実際に入る分だけ残し、
+    // 入り切らない分を「N more」にまとめる（購入リンクのドメイン表示と同じ考え方）。
+    // 一度切り詰めた後に再実測しても元に戻せるよう、保持しておいた全URLから毎回作り直す。
+    const urls = wrapper._scDescriptionUrls;
+    if (!urls) return;
+    wrapper.innerHTML = '';
+    urls.forEach((url) => wrapper.appendChild(createDescriptionLinkButton(url)));
+
+    const footer = wrapper.closest('.sound__footer');
+    const statsEl = footer?.querySelector('.sound__footerRight');
+    if (!statsEl) {
+      // 測る相手が見つからない文脈では、従来通りの固定件数にフォールバックする。
+      const buttons = wrapper.querySelectorAll(`.${DESCRIPTION_LINK_BUTTON_CLASS}`);
+      const hiddenCount = buttons.length - MAX_VISIBLE_DESCRIPTION_LINKS;
+      for (let i = MAX_VISIBLE_DESCRIPTION_LINKS; i < buttons.length; i++) buttons[i].remove();
+      if (hiddenCount > 0) appendDescriptionLinkMoreLabel(wrapper, hiddenCount);
+      return;
+    }
+
+    const statsLeft = statsEl.getBoundingClientRect().left;
+    // 「N more」ラベル自体の幅も判定に含める必要があるため、先に空のまま挿入しておき、
+    // 判定ループの各ステップで実際の件数をラベルに反映してから測る
+    // （件数の桁が変わると仮テキストと実際の表示幅がズレるため、常に実際の件数で測る）。
+    const moreLabel = document.createElement('span');
+    moreLabel.className = DESCRIPTION_LINK_MORE_CLASS;
+    wrapper.appendChild(moreLabel);
+
+    let hiddenCount = 0;
+    let buttons = wrapper.querySelectorAll(`.${DESCRIPTION_LINK_BUTTON_CLASS}`);
+    while (buttons.length > 0 && wrapper.getBoundingClientRect().right + DESCRIPTION_LINK_SAFETY_MARGIN_PX > statsLeft) {
+      buttons[buttons.length - 1].remove();
+      hiddenCount++;
+      moreLabel.textContent = `${hiddenCount} more`;
+      buttons = wrapper.querySelectorAll(`.${DESCRIPTION_LINK_BUTTON_CLASS}`);
+    }
+    if (hiddenCount === 0) {
+      moreLabel.remove();
+    }
+  }
+
+  function appendDescriptionLinkMoreLabel(wrapper, hiddenCount) {
+    const more = document.createElement('span');
+    more.className = DESCRIPTION_LINK_MORE_CLASS;
+    more.textContent = `${hiddenCount} more`;
+    wrapper.appendChild(more);
   }
 
   function insertDownloadButtons() {

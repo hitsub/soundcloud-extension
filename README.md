@@ -169,7 +169,7 @@ Likes画面（`/you/likes`・`/{ユーザー名}/likes`）の「List」表示で
 <summary> 詳細</summary>
 
 説明文は初回表示分には含まれておらず、スクロールして追加読み込みされた分にのみ含まれるため、画面を開いた直後・スクロール前に見えている一覧では表示されない。  
-説明文に複数のURLが含まれる場合はすべて並べるが、3件を超える分は「and N more」という表記にまとめる。  
+説明文に複数のURLが含まれる場合、再生数などの表示に被らない分だけ表示し、入り切らない分は「N more」という表記にまとめる。  
 `x.com`・`soundcloud.com`・`on.soundcloud.com`・`instagram.com`・`facebook.com`・`youtube.com`・`youtu.be`・`discord.com`・`ffm.bio`・`tiktok.com`宛のリンクと、購入リンク（BuyLink）と同一のURLは表示しない。  
 `open.spotify.com`は`spotify.com`と表記する。
 
