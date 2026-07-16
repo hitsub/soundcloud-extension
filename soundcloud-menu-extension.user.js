@@ -156,6 +156,9 @@
   const BUY_LINK_BUTTON_CLASS = 'scArtworkCopy__buyLinkButton';
   const PURCHASE_LINK_WRAPPER_CLASS = 'scArtworkCopy__purchaseLinkWrapper';
   const PURCHASE_LINK_DOMAIN_CLASS = 'scArtworkCopy__purchaseLinkDomain';
+  // 行によって再生数などまでの余白が変わるため、実測して当てる際の下限とマージン。
+  const PURCHASE_LINK_DOMAIN_MIN_WIDTH_PX = 40;
+  const PURCHASE_LINK_DOMAIN_SAFETY_MARGIN_PX = 8;
   const DESCRIPTION_LINK_WRAPPER_CLASS = 'scArtworkCopy__descriptionLinkWrapper';
   const DESCRIPTION_LINK_BUTTON_CLASS = 'scArtworkCopy__descriptionLinkButton';
   const DESCRIPTION_LINK_MORE_CLASS = 'scArtworkCopy__descriptionLinkMore';
@@ -315,6 +318,18 @@
       font-size: 11px;
       color: var(--secondary-text-color, #999) !important;
       white-space: nowrap;
+      /* ドメイン名が長いと再生数などの表示に被ってしまうため、
+         被らない程度の幅で省略記号に切り詰める。
+         このバッジは.scArtworkCopy__purchaseLinkWrapper（inline-flex）のflex子要素なので、
+         min-width: 0を明示しないとflexの自動最小サイズ（＝中身のフル幅）が
+         max-width/ellipsisより優先されてしまい、切り詰めが効かない。 */
+      max-width: 140px;
+      min-width: 0;
+      flex-shrink: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      vertical-align: middle;
     }
     /* 挿入先（.sc-button-groupの直後、または購入リンクの隣）がflexコンテナとは
        限らないため、align-self（flexの場合）とvertical-align（inline/baselineの
@@ -1628,8 +1643,22 @@
       const badge = document.createElement('span');
       badge.className = PURCHASE_LINK_DOMAIN_CLASS;
       badge.textContent = domain;
+      badge.title = domain; // CSSで省略記号に切り詰められた場合でも、ホバーで全体を確認できるようにする。
       wrapper.appendChild(badge);
+      constrainPurchaseLinkDomainWidth(badge);
     });
+  }
+
+  function constrainPurchaseLinkDomainWidth(badge) {
+    // 行によって再生数などの隣接表示までの余白が異なるため、固定値ではなく
+    // 実際のレイアウトから使える幅を測ってmax-widthを当てる。
+    const footer = badge.closest('.sound__footer');
+    const statsEl = footer?.querySelector('.sound__footerRight');
+    if (!statsEl) return; // 測る相手が見つからない文脈ではCSS側の固定値にフォールバックする。
+    const badgeLeft = badge.getBoundingClientRect().left;
+    const statsLeft = statsEl.getBoundingClientRect().left;
+    const available = statsLeft - badgeLeft - PURCHASE_LINK_DOMAIN_SAFETY_MARGIN_PX;
+    badge.style.maxWidth = `${Math.max(PURCHASE_LINK_DOMAIN_MIN_WIDTH_PX, available)}px`;
   }
 
   function extractUrlsFromText(text) {
