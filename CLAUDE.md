@@ -64,6 +64,8 @@ soundcloud.comにジャケット画像コピーボタンとメタデータタグ
 
 `insertDownloadButtons()`は、トラックのトリガーを別途、その「More」ドロップダウンが実際に開かれてネイティブの`.sc-button-download`を含んでいると分かった最初のタイミングでもマークする — 受動的なスキャンがデータを捕捉できなかったトラックのためのフォールバック。
 
+`recordDownloadableInfo()`は同じ再帰スキャンの中で`purchase_url`（BuyLink）も`purchaseUrlByPath`に記録する。プレイリストのリストビューはSoundCloud自身がBuyLinkのカートアイコンをそもそも描画しないため、DOMベースの`insertPurchaseLinkDomains()`ではこの文脈のトラックを拾えない — しかし裏で読んでいるJSON自体には`purchase_url`が乗っているため、こちらの受動スキャンで代替できる。`markTriggerHasPurchaseLink()`は`markTriggerDownloadable()`と対になる関数で、トリガーが`.trackItem`（プレイリスト/Station）の中にある場合のみ白い`MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS`（`var(--primary-color, #fff)`のアウトライン — Lightモードでも見えるようテーマ追従にしている）を付与する。それ以外の文脈（グリッド/リスト/単体ページ）ではネイティブの購入リンク自体がすでにアクション行に見えているため何もしない。また、そのトリガーが既にダウンロード可能としてオレンジでマーク済みなら、`.trackItem`内であっても白は付与しない（オレンジが優先、`markTriggerDownloadable()`側も逆に白いクラスを先に外してから自分の色を付けることで、どちらの順で呼ばれても最終的にオレンジが勝つようにしている）。プレイリストの行では`insertInlinePlaylistPurchaseIcon()`が、ダウンロードの目印と同じ理由・同じ「非ホバー時のみ表示」パターンで、再生回数の左にカートの目印を追加する（こちらはダウンロード可否と独立に、BuyLinkさえあれば表示する）。実際にBuyLinkへ遷移させるのは`insertBuyLinkButtons()`が「More」メニューに追加する「Open BuyLink (ドメイン名)」ボタンのみで、これはダウンロード機能のような読み込み中/成功/失敗の状態遷移が不要な単純操作のため`attachCopyHandler()`を経由せず、クリックで直接`window.open()`する。このボタンは、トリガーが`.trackItem`（プレイリスト/Station）の中にある場合のみ追加する — それ以外の文脈ではネイティブの購入リンク（カートアイコン）自体がすでにアクション行に表示されているため。
+
 ### エラー処理・ローカライズ
 
 すべての失敗経路は、生の文字列メッセージではなく`failWith(code, params)`経由で例外を投げる。これにより、ユーザーに表示されるトースト（`localizeError`、`navigator.language`をキーに英語/日本語のみ対応）が、`console.error`に今も使われる英語の`err.message`から独立した状態を保てる。新しい失敗ケースを追加する際は、`failWith('SOME_CODE', {...})`の呼び出しと`ERROR_MESSAGES`への対応するエントリの両方を追加すること — `throw new Error('...')`を直接使うと、汎用的な「Something went wrong」トーストにフォールバックしてしまう。
