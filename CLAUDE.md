@@ -43,7 +43,8 @@ soundcloud.comにジャケット画像コピーボタンとメタデータタグ
 ### ジャケット画像URLの解決とクリップボードの癖
 
 - `getHighResUrl()`はトラックのサムネイルサイズのURLを最高解像度の`-original`に置き換える。**2種類の異なるサフィックス表記**にマッチさせる必要がある: Webアプリ自身が描画するDOMは`-t{width}x{height}`（例: `-t500x500`）を使うが、api-v2の`/resolve`レスポンスの`artwork_url`フィールドはSoundCloudの古い`-large`表記を使う。どちらか一方でも見逃すと、アップグレードが静かにスキップされ、小さくPNGでないことが多い画像にフォールバックしてしまう。
-- Chromeのクリップボード APIが`navigator.clipboard.write()`で保証しているのは`image/png`のみ — 一部のジャケット画像（特に`-original`版が存在しないもの）は`image/jpeg`で配信されており、書き込みがそのまま拒否されることがある（`NotAllowedError: ... Type image/jpeg not supported on write`）。`copyArtworkFromBaseUrl()`は、PNGでないblobを書き込み前に`OffscreenCanvas`/`createImageBitmap`経由で変換する。この変換は意図的に、ダウンロード＆タグ付け機能側のジャケット画像取得（`fetchArtworkBuffer`）には適用していない — そちらは別のコードパスであり、クリップボードのフォーマット制約を受けないため。
+- Chromeのクリップボード APIが`navigator.clipboard.write()`で保証しているのは`image/png`のみ — 一部のジャケット画像（特に`-original`版が存在しないもの）は`image/jpeg`で配信されており、書き込みがそのまま拒否されることがある（`NotAllowedError: ... Type image/jpeg not supported on write`）。`resolveArtworkBlob()`は、PNGでないblobを書き込み前に`OffscreenCanvas`/`createImageBitmap`経由で変換する。この変換は意図的に、ダウンロード＆タグ付け機能側のジャケット画像取得（`fetchArtworkBuffer`）には適用していない — そちらは別のコードパスであり、クリップボードのフォーマット制約を受けないため。
+- `navigator.clipboard.write()`は「呼び出された瞬間にドキュメントがフォーカスされていること」も要求する（フォーカスが外れていると`NotAllowedError: Document is not focused.`）。クリックした後にウィンドウを切り替えられてもコピーが成立するように、`copyArtworkFromBaseUrl()`/`copyArtwork()`は実際のfetch/PNG変換（`resolveArtworkBlob()`/`resolveHeroArtworkBlob()`）を`ClipboardItem`に**解決前のPromiseのまま**渡し、`.write()`自体はawaitを一切挟まずクリックと同じ同期呼び出しの中で呼ぶ。この経路（`attachCopyHandler`のクリックハンドラ→`copyFn()`→…→`.write()`）のどこかに`await`を挟むと、この対策は静かに効かなくなる。
 
 ### メタデータタグの書き込み（WAV / MP3 / FLAC）
 
