@@ -169,6 +169,7 @@
   // 個別のリンクとして目立たせる価値が薄いため除外する。
   const DESCRIPTION_LINK_EXCLUDED_DOMAINS = new Set([
     'x.com',
+    'twitter.com',
     'soundcloud.com',
     'on.soundcloud.com',
     'instagram.com',
@@ -176,6 +177,7 @@
     'youtube.com',
     'youtu.be',
     'discord.com',
+    'discord.gg',
     'ffm.bio',
     'tiktok.com',
   ]);
@@ -1552,6 +1554,19 @@
       resolveCopy: () => copyArtwork,
       // タイルオーバーレイのFont Awesomeクリップボードアイコンではなく、
       // 以前のヘッダーボタンと同じアイコンを使う。
+      icon: ICON_IDLE,
+    },
+    {
+      // アーティストが「Visuals」（TrackArt）を設定した単体ページは、通常の
+      // .listenEngagement__footerではなく「List」表示と同じ.sound__body/.soundActions
+      // マークアップを再利用している。ただし.sound__body内にあるのは正方形ジャケットの
+      // .sound__artworkではなく、背景動画/静止画用の.visuals（別物）なので、上のList表示
+      // configにマッチしても中のジャケット画像URLを読み取れず、ボタンが出せていなかった。
+      // このレイアウトを一意に示す.visualSoundクラスで絞り込み、単体ページ用configと同様に
+      // copyArtwork()（api-v2ベースの取得）を再利用する。
+      rowSelector: '.visualSound .soundActions .sc-button-group',
+      buttonClasses: 'sc-button-secondary sc-button sc-button-medium sc-button-icon sc-button-responsive',
+      resolveCopy: () => copyArtwork,
       icon: ICON_IDLE,
     },
   ];
