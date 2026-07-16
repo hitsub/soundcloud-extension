@@ -133,6 +133,17 @@
   // Playlist/Station（.trackItem）のMoreボタンにしか付かないため、グリッド
   // タイル用のアイコン色変更バリアントは不要（アウトラインのみで足りる）。
   const MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS = 'scArtworkCopy__moreButton--hasPurchaseLink';
+  // グリッド（Badges）タイルはMoreボタン自体をアウトラインできない代わりに、
+  // ジャケット画像そのものを囲む。優先順位はMoreボタンの色分けと同じ
+  // （ダウンロード可能なら常にこちらが優先、BuyLinkのみなら白系）。
+  // .playableTile__artworkに直接outlineを当てると、中の画像レイヤーが
+  // （おそらくホバー拡大用のtransform/will-changeで）独自の合成レイヤーを
+  // 持っており、その下に潜って見えなくなってしまった。そのため専用の
+  // オーバーレイ要素（TILE_ARTWORK_OUTLINE_CLASS）を最後の子として挿入し、
+  // 明示的なz-indexで確実に画像より前面に来るようにする。
+  const TILE_ARTWORK_OUTLINE_CLASS = 'scArtworkCopy__tileArtworkOutline';
+  const TILE_ARTWORK_DOWNLOAD_HIGHLIGHT_CLASS = 'scArtworkCopy__tileArtwork--hasDownload';
+  const TILE_ARTWORK_PURCHASE_HIGHLIGHT_CLASS = 'scArtworkCopy__tileArtwork--hasPurchaseLink';
   const INLINE_DOWNLOAD_ICON_CLASS = 'scArtworkCopy__inlineDownloadIcon';
   const INLINE_PURCHASE_ICON_CLASS = 'scArtworkCopy__inlinePurchaseIcon';
   const BUY_LINK_BUTTON_CLASS = 'scArtworkCopy__buyLinkButton';
@@ -198,6 +209,27 @@
     .${MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS} {
       outline: 2px solid var(--primary-color, #fff) !important;
       outline-offset: -2px;
+    }
+    /* 挿入先の.playableTile__artworkが常にposition:relativeとは限らないため明示する
+       （このオーバーレイをinset:0で敷き詰めるための基準にするだけで、それ自体のレイアウトには影響しない）。 */
+    .playableTile__artwork {
+      position: relative;
+    }
+    .${TILE_ARTWORK_OUTLINE_CLASS} {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      border-radius: inherit;
+      box-sizing: border-box;
+    }
+    .${TILE_ARTWORK_OUTLINE_CLASS}.${TILE_ARTWORK_DOWNLOAD_HIGHLIGHT_CLASS} {
+      box-shadow: inset 0 0 0 1px #ff5500;
+    }
+    /* 固定の白だとLightモードで背景に溶けて見えなくなるため、
+       曲タイトルなどと同じテーマ追従のテキスト色を使う。 */
+    .${TILE_ARTWORK_OUTLINE_CLASS}.${TILE_ARTWORK_PURCHASE_HIGHLIGHT_CLASS} {
+      box-shadow: inset 0 0 0 1px var(--primary-color, #fff);
     }
     /* 上で強制しているcolor/fillがネイティブボタン自身の:hoverフェードを妨げてしまうため、
        隣のボタン（Like/Follow/Moreなど）と挙動を揃えるために同じフェードを明示的に再定義する。 */
@@ -1088,6 +1120,36 @@
     anchor.insertAdjacentElement('beforebegin', createInlinePurchaseIcon());
   }
 
+  function resolveGridTileArtwork(trigger) {
+    // insertTileButtons()のグリッドconfigと同じ辿り方（.playableTile__actionWrapper→closestで.playableTile__artwork）。
+    return trigger.closest('.playableTile__actionWrapper')?.closest('.playableTile__artwork') ?? null;
+  }
+
+  function resolveArtworkBorderRadius(artworkEl) {
+    // 角丸は.playableTile__artwork自体ではなく内側の画像要素に付いていることが多いため、
+    // firstElementChildを辿りながら実際に0でないborder-radiusを持つ要素を探す。
+    let el = artworkEl;
+    while (el) {
+      const radius = getComputedStyle(el).borderRadius;
+      if (radius && radius !== '0px') return radius;
+      el = el.firstElementChild;
+    }
+    return '0px';
+  }
+
+  function ensureTileArtworkOutline(artworkEl) {
+    // .playableTile__artworkに直接クラスを当てると画像レイヤーの下に隠れてしまうため、
+    // 明示的なz-indexを持つ専用オーバーレイを最後の子として挿入し、そちらにクラスを付け外しする。
+    let overlay = artworkEl.querySelector(`:scope > .${TILE_ARTWORK_OUTLINE_CLASS}`);
+    if (!overlay) {
+      overlay = document.createElement('span');
+      overlay.className = TILE_ARTWORK_OUTLINE_CLASS;
+      artworkEl.appendChild(overlay);
+    }
+    overlay.style.borderRadius = resolveArtworkBorderRadius(artworkEl);
+    return overlay;
+  }
+
   function markTriggerDownloadable(trigger) {
     // グリッドタイルのMoreボタンはジャケット画像の上に乗っているため、
     // 他の箇所で使うアウトラインではなくアイコン色変更の方式を維持する。
@@ -1096,6 +1158,15 @@
     // 優先する — 白いBuyLink用ハイライトが先に付いていたら外す。
     trigger.classList.remove(MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS);
     trigger.classList.add(isGridTile ? MORE_BUTTON_ICON_HIGHLIGHT_CLASS : MORE_BUTTON_HIGHLIGHT_CLASS);
+    if (isGridTile) {
+      // Moreボタン自体には乗せられない分、ジャケット画像そのものをオレンジで囲む。
+      const artwork = resolveGridTileArtwork(trigger);
+      if (artwork) {
+        const overlay = ensureTileArtworkOutline(artwork);
+        overlay.classList.remove(TILE_ARTWORK_PURCHASE_HIGHLIGHT_CLASS);
+        overlay.classList.add(TILE_ARTWORK_DOWNLOAD_HIGHLIGHT_CLASS);
+      }
+    }
     insertInlinePlaylistDownloadIcon(trigger);
   }
 
@@ -1105,12 +1176,24 @@
     // ネイティブの購入リンク（カートアイコン）がすでにアクション行に
     // 表示されているため。
     const isPlaylistOrStation = !!trigger.closest('.trackItem');
+    const isGridTile = !!trigger.closest('.playableTile__actionWrapper');
     // ダウンロード可能としてすでにオレンジでマーク済みなら、そちらを優先し
     // Moreボタンの色は変えない（インジケーターアイコンの表示は独立に行う）。
     const alreadyDownloadHighlighted =
       trigger.classList.contains(MORE_BUTTON_HIGHLIGHT_CLASS) || trigger.classList.contains(MORE_BUTTON_ICON_HIGHLIGHT_CLASS);
     if (isPlaylistOrStation && !alreadyDownloadHighlighted) {
       trigger.classList.add(MORE_BUTTON_PURCHASE_HIGHLIGHT_CLASS);
+    }
+    if (isGridTile) {
+      // グリッドタイルはMoreボタンではなくジャケット画像を囲む。
+      // ダウンロード可能ですでにオレンジで囲まれているなら、そちらを優先し白は付けない。
+      const artwork = resolveGridTileArtwork(trigger);
+      if (artwork) {
+        const overlay = ensureTileArtworkOutline(artwork);
+        if (!overlay.classList.contains(TILE_ARTWORK_DOWNLOAD_HIGHLIGHT_CLASS)) {
+          overlay.classList.add(TILE_ARTWORK_PURCHASE_HIGHLIGHT_CLASS);
+        }
+      }
     }
     insertInlinePlaylistPurchaseIcon(trigger);
   }
@@ -1124,6 +1207,9 @@
     const row = trigger.closest('.trackItem');
     row?.querySelector(`.${INLINE_DOWNLOAD_ICON_CLASS}`)?.remove();
     row?.querySelector(`.${INLINE_PURCHASE_ICON_CLASS}`)?.remove();
+    resolveGridTileArtwork(trigger)
+      ?.querySelector(`.${TILE_ARTWORK_OUTLINE_CLASS}`)
+      ?.remove();
   }
 
   function highlightDownloadableTriggers() {
@@ -1542,12 +1628,14 @@
       if (groupEl.querySelector(`.${BUY_LINK_BUTTON_CLASS}`)) return;
       const dropdownEl = groupEl.closest('.dropdownMenu');
       if (!dropdownEl) return;
-      // Playlist/Stationの行（.trackItem）以外では、ネイティブの購入リンク
+      // Playlist/Stationの行（.trackItem）およびグリッド（Badges）タイル
+      // （.playableTile__actionWrapper）以外では、ネイティブの購入リンク
       // （カートアイコン、insertPurchaseLinkDomains()がドメインを添えている）
       // がすでにアクション行に見えているはずなので、Moreメニューへの追加は
-      // この2つの文脈に限定する。
+      // この2つの文脈に限定する。グリッドタイルのアクション行はLike/Follow/Moreのみで、
+      // ネイティブの購入リンク自体がそもそも表示されないため対象に含める。
       const trigger = document.querySelector(`[aria-owns="${CSS.escape(dropdownEl.id)}"]`);
-      if (!trigger?.closest('.trackItem')) return;
+      if (!trigger?.closest('.trackItem') && !trigger?.closest('.playableTile__actionWrapper')) return;
       const path = permalinkPath(resolveTrackPermalink(dropdownEl));
       const purchaseUrl = path && purchaseUrlByPath.get(path);
       if (!purchaseUrl) return;
