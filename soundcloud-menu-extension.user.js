@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SoundCloud Menu Extension
 // @namespace    https://github.com/hitsub/soundcloud-extension/
-// @version      0.5.0
+// @version      0.5.1
 // @description  トラックのタイル/行/単体ページ、またはMoreメニューからジャケット画像をコピーし、タイトル・アーティスト・アルバム・ジャケット画像タグが未設定のファイルをダウンロード時に自動で埋め込む（WAV/MP3/FLAC）
 // @author       hitsub
 // @match        *://soundcloud.com/*
