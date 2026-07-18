@@ -153,6 +153,8 @@ BuyLink (カートアイコンの購入リンク) が出ない画面（プレイ
 - プレイリストでは、再生回数の左に（ダウンロードアイコンと同様の）カートアイコンの目印が表示される
 - プレイリスト・Station・グリッド（Badges）表示の「More」メニューに「Open BuyLink (ドメイン名)」が追加され、クリックすると新しいタブでBuyLinkが開く
 
+<img width="553" height="263" alt="image" src="https://github.com/user-attachments/assets/2c279704-9114-4de4-9eb0-9cd0d8d00ce4" />
+
 <details>
 <summary> 詳細</summary>
 
@@ -161,6 +163,8 @@ BuyLink (カートアイコンの購入リンク) が出ない画面（プレイ
 </details>
 
 ## 説明文中のリンク表示（Likes画面）
+
+<img width="695" height="148" alt="スクリーンショット 2026-07-18 13 49 05" src="https://github.com/user-attachments/assets/6b9b5281-e24e-4974-a342-e3cc01526276" />
 
 Likes画面の「List」表示に限り、楽曲の説明文にURLが含まれている場合、BuyLinkと同じエリアにリンクを並べ、曲の詳細ページに飛ばなくても見れるようにする。  
 
